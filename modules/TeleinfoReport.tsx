@@ -722,8 +722,8 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
 
 export const TeleinfoReport: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [fileName, setFileName] = useState<string>('Nenhum arquivo');
+    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_report_projects', []);
+    const [fileName, setFileName] = useLocalStorage<string>('nexus_teleinfo_report_filename', 'Nenhum arquivo');
 
     return (
         <div className="flex flex-col h-full space-y-6">

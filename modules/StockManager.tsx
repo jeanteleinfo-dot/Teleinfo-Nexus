@@ -21,6 +21,31 @@ const COLORS = {
   CRITICAL: '#ef4444' // red-500
 };
 
+// LocalStorage Hook (Duplicated here to keep module independent or could be moved to utils)
+function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        try {
+            const item = window.localStorage.getItem(key);
+            return item ? JSON.parse(item) : initialValue;
+        } catch (error) {
+            console.log(error);
+            return initialValue;
+        }
+    });
+
+    const setValue = (value: T | ((val: T) => T)) => {
+        try {
+            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            setStoredValue(valueToStore);
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+            console.log(error);
+        }
+    };
+
+    return [storedValue, setValue];
+}
+
 // CSV Parser Helper for SLA Projects
 const parseProjectsCSV = (text: string): SLAProject[] => {
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
@@ -281,7 +306,8 @@ const ProjectTable: React.FC<{ projects: SLAProject[]; onEmailClick: (p: SLAProj
 // --- SUB-VIEWS ---
 
 const StockMonitoringView: React.FC = () => {
-    const [projects, setProjects] = useState<SLAProject[]>([]);
+    // Replaced useState with useLocalStorage to persist data
+    const [projects, setProjects] = useLocalStorage<SLAProject[]>('nexus_stock_sla_projects', []);
     const [selectedProject, setSelectedProject] = useState<SLAProject | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -341,7 +367,8 @@ const StockMonitoringView: React.FC = () => {
 };
 
 const SLAControlView: React.FC = () => {
-    const [projects, setProjects] = useState<MultiPhaseProject[]>([]);
+    // Replaced useState with useLocalStorage to persist data
+    const [projects, setProjects] = useLocalStorage<MultiPhaseProject[]>('nexus_stock_multiphase_projects', []);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
