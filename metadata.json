@@ -1,0 +1,5 @@
+{
+  "name": "Teleinfo Nexus Platform",
+  "description": "Unified enterprise platform integrating Teleinfo IA Reports, Stock Monitoring, and Teleinfo Manager with role-based access control.",
+  "requestFramePermissions": []
+}
