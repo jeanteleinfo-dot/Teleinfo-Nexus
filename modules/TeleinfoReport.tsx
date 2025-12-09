@@ -805,7 +805,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
                     <Layers size={64} className="mb-4 opacity-20" />
                     <p className="text-xl">Nenhum dado de SLA/Fases encontrado.</p>
-                    <p className="text-sm">Importe os dados no módulo de "Estoque & Compras" > "Controle Fases".</p>
+                    <p className="text-sm">Importe os dados no módulo de "Estoque & Compras" &gt; "Controle Fases".</p>
                 </div>
             )}
         </Slide>,
