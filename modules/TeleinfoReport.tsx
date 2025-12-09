@@ -5,10 +5,10 @@ import {
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
-  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar 
+  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers
 } from 'lucide-react';
 import { generateProjectRiskAnalysis, generateDetailedProjectRiskAnalysis } from '../services/geminiService';
-import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep } from '../types';
+import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject } from '../types';
 
 // Declare html2pdf for TypeScript since it is loaded via CDN
 declare const html2pdf: any;
@@ -617,6 +617,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     const [keyFacts, setKeyFacts] = useLocalStorage<KeyFact[]>('nexus_teleinfo_keyfacts', []);
     const [nextSteps, setNextSteps] = useLocalStorage<NextStep[]>('nexus_teleinfo_nextsteps', []);
     const [detailedProjects] = useLocalStorage<DetailedProject[]>('nexus_teleinfo_detailed_projects', []);
+    const [multiPhaseProjects] = useLocalStorage<MultiPhaseProject[]>('nexus_stock_multiphase_projects', []);
     
     // Inputs
     const [factText, setFactText] = useState('');
@@ -652,6 +653,24 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
             buChart: Object.entries(buChart).map(([k, v]) => ({ name: k, value: v, color: getBuChartColor(k) }))
         };
     }, [allProjects]);
+
+    const phaseStats = useMemo(() => {
+        if (!multiPhaseProjects.length) return null;
+        const total = multiPhaseProjects.length;
+        const avg = {
+            triagem: multiPhaseProjects.reduce((acc, p) => acc + p.diasTriagem, 0) / total,
+            kickoff: multiPhaseProjects.reduce((acc, p) => acc + p.diasKickoff, 0) / total,
+            estoque: multiPhaseProjects.reduce((acc, p) => acc + p.diasEstoque, 0) / total,
+        };
+        return {
+            averages: avg,
+            chartData: [
+                { name: 'Triagem', dias: parseFloat(avg.triagem.toFixed(2)), fill: '#3b82f6' },
+                { name: 'Kickoff', dias: parseFloat(avg.kickoff.toFixed(2)), fill: '#8b5cf6' },
+                { name: 'Estoque', dias: parseFloat(avg.estoque.toFixed(2)), fill: '#f59e0b' },
+            ]
+        };
+    }, [multiPhaseProjects]);
 
     const slides = useMemo(() => [
         // Slide 1: Cover
@@ -737,6 +756,58 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                     </div>
                 </div>
             </div>
+        </Slide>,
+        // Slide 4: SLA Overview (New)
+        <Slide key="sla-phases">
+            <h2 className="text-3xl font-bold text-slate-800 mb-6 border-b pb-2">Visão Geral de SLA (Fases)</h2>
+            {phaseStats ? (
+                <>
+                    <div className="grid grid-cols-3 gap-6 mb-8">
+                         <div className="bg-blue-50 p-6 rounded-lg border border-blue-100 flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-blue-500 font-bold uppercase">Média Triagem</p>
+                                <p className="text-4xl font-bold text-blue-700">{phaseStats.averages.triagem.toFixed(1)} <span className="text-base font-normal text-blue-400">dias</span></p>
+                            </div>
+                            <Layers className="text-blue-300" size={48} />
+                         </div>
+                         <div className="bg-purple-50 p-6 rounded-lg border border-purple-100 flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-purple-500 font-bold uppercase">Média Kickoff</p>
+                                <p className="text-4xl font-bold text-purple-700">{phaseStats.averages.kickoff.toFixed(1)} <span className="text-base font-normal text-purple-400">dias</span></p>
+                            </div>
+                            <Layers className="text-purple-300" size={48} />
+                         </div>
+                         <div className="bg-amber-50 p-6 rounded-lg border border-amber-100 flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-amber-500 font-bold uppercase">Média Estoque</p>
+                                <p className="text-4xl font-bold text-amber-700">{phaseStats.averages.estoque.toFixed(1)} <span className="text-base font-normal text-amber-400">dias</span></p>
+                            </div>
+                            <Layers className="text-amber-300" size={48} />
+                         </div>
+                    </div>
+                    <div className="h-64 bg-slate-50 rounded-xl p-6 border border-slate-200">
+                         <h3 className="text-slate-700 font-semibold mb-4">Comparativo de Médias por Fase</h3>
+                         <ResponsiveContainer>
+                            <BarChart data={phaseStats.chartData} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                                <XAxis type="number" stroke="#64748b" />
+                                <YAxis dataKey="name" type="category" stroke="#64748b" width={80} />
+                                <Bar dataKey="dias" radius={[0, 4, 4, 0]} barSize={40}>
+                                    {phaseStats.chartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </>
+            ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <Layers size={64} className="mb-4 opacity-20" />
+                    <p className="text-xl">Nenhum dado de SLA/Fases encontrado.</p>
+                    <p className="text-sm">Importe os dados no módulo de "Estoque & Compras" > "Controle Fases".</p>
+                </div>
+            )}
         </Slide>,
         // Detailed Projects Slides
         ...detailedProjects.map(p => {
@@ -830,7 +901,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                  )) : <p className="text-gray-400 italic">Nenhum próximo passo registrado.</p>}
              </div>
         </Slide>
-    ], [portfolioStats, keyFacts, detailedProjects, nextSteps]);
+    ], [portfolioStats, keyFacts, detailedProjects, nextSteps, phaseStats]);
 
     const generatePdf = () => {
         const element = document.getElementById('presentation-content');
@@ -917,40 +988,49 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
 };
 
 export const TeleinfoReport: React.FC = () => {
-    const [view, setView] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
-    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects_cache', []);
-    const [fileName, setFileName] = useLocalStorage<string>('nexus_teleinfo_filename', '');
+    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects', []);
+    const [fileName, setFileName] = useState('');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
 
-    const handleDataLoaded = (data: Project[], file: string) => {
+    const handleDataLoaded = (data: Project[], name: string) => {
         setProjects(data);
-        setFileName(file);
+        setFileName(name);
     };
 
     return (
         <div className="flex flex-col h-full space-y-6">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">Relatórios Inteligentes</h2>
-                  <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Apresentações</p>
+                    <h2 className="text-2xl font-bold text-white">Relatórios Inteligentes IA</h2>
+                    <p className="text-nexus-400">Análise de Projetos e Geração de Status Report</p>
                 </div>
                 <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
-                    <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white hover:bg-nexus-700'}`}>
-                        Dashboard Geral
-                    </button>
-                    <button onClick={() => setView('monitoring')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'monitoring' ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white hover:bg-nexus-700'}`}>
-                        Auditoria Detalhada
-                    </button>
-                    <button onClick={() => setView('presentation')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'presentation' ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white hover:bg-nexus-700'}`}>
-                        Gerador Apresentação
-                    </button>
+                    {[
+                        { id: 'dashboard', label: 'Dashboard Geral', icon: FileText },
+                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: GanttChartSquare },
+                        { id: 'presentation', label: 'Apresentação', icon: Tv },
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                                activeTab === tab.id 
+                                ? 'bg-blue-600 text-white shadow-lg' 
+                                : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
+                            }`}
+                        >
+                            <tab.icon size={16} />
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
-              </div>
+            </div>
 
-              <div className="flex-1 min-h-0">
-                  {view === 'dashboard' && <DashboardView projects={projects} onDataLoaded={handleDataLoaded} fileName={fileName} />}
-                  {view === 'monitoring' && <MonitoringView />}
-                  {view === 'presentation' && <PresentationView allProjects={projects} />}
-              </div>
+            <div className="flex-1 min-h-0">
+                {activeTab === 'dashboard' && <DashboardView projects={projects} onDataLoaded={handleDataLoaded} fileName={fileName} />}
+                {activeTab === 'monitoring' && <MonitoringView />}
+                {activeTab === 'presentation' && <PresentationView allProjects={projects} />}
+            </div>
         </div>
     );
 };
