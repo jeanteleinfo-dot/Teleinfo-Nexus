@@ -591,44 +591,85 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
              </div>
         </Slide>,
         // Detailed Projects Slides
-        ...detailedProjects.map(p => (
-            <Slide key={p.id}>
-                 <div className="flex justify-between items-center border-b pb-4 mb-6">
-                    <h2 className="text-2xl font-bold text-slate-800">
-                        {p.costCenter && <span className="text-gray-500 mr-2 text-xl font-medium">[{p.costCenter}]</span>}
-                        {p.name}
-                    </h2>
-                    <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">{p.start} - {p.end}</span>
-                 </div>
-                 <div className="grid grid-cols-2 gap-8 h-full">
-                     <div>
-                         <h3 className="font-semibold mb-4 text-slate-600">Cronograma</h3>
-                         <div className="space-y-4">
-                             {p.steps.map((s, i) => (
-                                 <div key={i}>
-                                     <div className="flex justify-between text-sm mb-1"><span>{s.name}</span><span>{s.perc}%</span></div>
-                                     <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${s.perc}%`}}></div></div>
-                                 </div>
-                             ))}
+        ...detailedProjects.map(p => {
+            // Calculations for Time Progress
+            const start = new Date(p.start);
+            const end = new Date(p.end);
+            const now = new Date();
+            let timeProgress = 0;
+            if (p.start && p.end && end > start) {
+                const total = end.getTime() - start.getTime();
+                const elapsed = now.getTime() - start.getTime();
+                timeProgress = Math.min(100, Math.max(0, (elapsed / total) * 100));
+            }
+
+            // Calculation for Global Project Percentage (Average of steps)
+            const globalPerc = p.steps.length > 0 
+                ? Math.round(p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length)
+                : 0;
+
+            return (
+                <Slide key={p.id}>
+                    <div className="flex justify-between items-start border-b pb-4 mb-4">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-800">
+                                {p.costCenter && <span className="text-gray-500 mr-2 text-xl font-medium">[{p.costCenter}]</span>}
+                                {p.name}
+                            </h2>
+                            <span className="text-sm text-gray-500 mt-1 block">Período: {p.start} a {p.end}</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                             <div className="text-right">
+                                 <span className="block text-xs font-bold text-gray-400 uppercase">Progresso Global</span>
+                                 <span className="text-3xl font-bold text-blue-600">{globalPerc}%</span>
+                             </div>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-8 h-full pb-12">
+                        <div>
+                            <h3 className="font-semibold mb-4 text-slate-600">Cronograma</h3>
+                            <div className="space-y-4">
+                                {p.steps.map((s, i) => (
+                                    <div key={i}>
+                                        <div className="flex justify-between text-sm mb-1"><span>{s.name}</span><span>{s.perc}%</span></div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${s.perc}%`}}></div></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold mb-4 text-slate-600">Performance de Horas</h3>
+                            <div className="h-48">
+                                <ResponsiveContainer>
+                                    <BarChart data={Object.keys(p.soldHours).map(k => ({name: k.toUpperCase(), Sold: p.soldHours[k as keyof BuHours], Used: p.usedHours[k as keyof BuHours]}))}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="name" fontSize={10} />
+                                        <Legend />
+                                        <Bar dataKey="Sold" fill="#10b981" />
+                                        <Bar dataKey="Used" fill="#f97316" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Time Progress Bar Footer */}
+                    <div className="absolute bottom-0 left-0 w-full bg-gray-50 border-t border-gray-100">
+                         <div className="flex justify-between px-8 py-1 text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+                             <span>Início: {p.start}</span>
+                             <span>Cronograma Decorrido: {timeProgress.toFixed(1)}%</span>
+                             <span>Término: {p.end}</span>
                          </div>
-                     </div>
-                     <div>
-                         <h3 className="font-semibold mb-4 text-slate-600">Performance de Horas</h3>
-                         <div className="h-48">
-                            <ResponsiveContainer>
-                                <BarChart data={Object.keys(p.soldHours).map(k => ({name: k.toUpperCase(), Sold: p.soldHours[k as keyof BuHours], Used: p.usedHours[k as keyof BuHours]}))}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" fontSize={10} />
-                                    <Legend />
-                                    <Bar dataKey="Sold" fill="#10b981" />
-                                    <Bar dataKey="Used" fill="#f97316" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                         <div className="w-full h-2 bg-gray-200">
+                             <div 
+                                className={`h-full transition-all duration-1000 ${timeProgress >= 100 ? 'bg-red-500' : 'bg-slate-600'}`}
+                                style={{width: `${timeProgress}%`}}
+                             ></div>
                          </div>
-                     </div>
-                 </div>
-            </Slide>
-        )),
+                    </div>
+                </Slide>
+            );
+        }),
         // Next Steps
         <Slide key="next">
             <h2 className="text-3xl font-bold text-slate-800 mb-8 border-b pb-4">Próximos Passos</h2>
@@ -727,24 +768,27 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     );
 };
 
-// --- MAIN WRAPPER ---
-
 export const TeleinfoReport: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
-    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_report_projects', []);
-    const [fileName, setFileName] = useLocalStorage<string>('nexus_teleinfo_report_filename', 'Nenhum arquivo');
+    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects_cache', []);
+    const [fileName, setFileName] = useState<string>('Dados em Cache');
+
+    const handleDataLoaded = (data: Project[], name: string) => {
+        setProjects(data);
+        setFileName(name);
+    };
 
     return (
         <div className="flex flex-col h-full space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Teleinfo IA Status Report</h1>
-                    <p className="text-nexus-400">Suíte de gestão de projetos, monitoramento e relatórios executivos.</p>
+                    <h2 className="text-2xl font-bold text-white">Relatórios Inteligentes IA</h2>
+                    <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Status Report</p>
                 </div>
                 <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
                     {[
-                        { id: 'dashboard', label: 'Dashboard', icon: FileText },
-                        { id: 'monitoring', label: 'Monitoramento', icon: GanttChartSquare },
+                        { id: 'dashboard', label: 'Visão Geral', icon: FileText },
+                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
                         { id: 'presentation', label: 'Apresentação', icon: Tv },
                     ].map(tab => (
                         <button
@@ -764,16 +808,7 @@ export const TeleinfoReport: React.FC = () => {
             </div>
 
             <div className="flex-1 min-h-0">
-                {activeTab === 'dashboard' && (
-                    <DashboardView 
-                        projects={projects} 
-                        fileName={fileName}
-                        onDataLoaded={(data, name) => {
-                            setProjects(data);
-                            setFileName(name);
-                        }} 
-                    />
-                )}
+                {activeTab === 'dashboard' && <DashboardView projects={projects} onDataLoaded={handleDataLoaded} fileName={fileName} />}
                 {activeTab === 'monitoring' && <MonitoringView />}
                 {activeTab === 'presentation' && <PresentationView allProjects={projects} />}
             </div>
