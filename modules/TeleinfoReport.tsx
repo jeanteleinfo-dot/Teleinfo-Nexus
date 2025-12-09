@@ -594,7 +594,10 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
         ...detailedProjects.map(p => (
             <Slide key={p.id}>
                  <div className="flex justify-between items-center border-b pb-4 mb-6">
-                    <h2 className="text-2xl font-bold text-slate-800">{p.name}</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">
+                        {p.costCenter && <span className="text-gray-500 mr-2 text-xl font-medium">[{p.costCenter}]</span>}
+                        {p.name}
+                    </h2>
                     <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">{p.start} - {p.end}</span>
                  </div>
                  <div className="grid grid-cols-2 gap-8 h-full">
