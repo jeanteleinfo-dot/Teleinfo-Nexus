@@ -835,7 +835,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                                 {p.costCenter && <span className="text-gray-500 mr-2 text-xl font-medium">[{p.costCenter}]</span>}
                                 {p.name}
                             </h2>
-                            <span className="text-sm text-gray-500 mt-1 block">Período: {p.start} a {p.end}</span>
+                            {/* Line removed here */}
                         </div>
                         <div className="flex items-center gap-4">
                              <div className="text-right">
