@@ -1,18 +1,44 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { 
   LayoutDashboard, Users, FolderKanban, CalendarClock, UserX, ClipboardList,
-  Plus, Trash2, Edit2, Search, MapPin, Building2, FileText, Clock, Car, 
-  ChevronLeft, ChevronRight, Printer, User, Mail
+  Plus, Trash2, MapPin, Building2, FileText,
+  ChevronLeft, ChevronRight, Printer, User, Save
 } from 'lucide-react';
 import { 
   ManagerProject, Employee, Schedule, Absence, AbsenceType, BU, BUColorsClass, BUColorsHex 
 } from '../types';
 
-// --- MOCK DATA ---
+// --- HOOKS ---
+
+function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        try {
+            const item = window.localStorage.getItem(key);
+            return item ? JSON.parse(item) : initialValue;
+        } catch (error) {
+            console.log(error);
+            return initialValue;
+        }
+    });
+
+    const setValue = (value: T | ((val: T) => T)) => {
+        try {
+            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            setStoredValue(valueToStore);
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+            console.log(error);
+        }
+    };
+
+    return [storedValue, setValue];
+}
+
+// --- MOCK DATA (Initial Seeds) ---
 
 const INITIAL_EMPLOYEES: Employee[] = [
   { id: '1', name: 'Carlos Silva', role: 'Técnico Líder' },
@@ -165,7 +191,13 @@ const ScheduleView: React.FC<{ projects: ManagerProject[], employees: Employee[]
     if (!selectedEmpId || !selectedProjId || selectedDates.length === 0) return alert("Preencha todos os campos e selecione dias.");
     const newSchedules = selectedDates.map(date => ({
       id: Math.random().toString(36).substr(2, 9),
-      date, projectId: selectedProjId, employeeId: selectedEmpId, vehicle, startTime, endTime, osNumber: selectedProject?.osNumber
+      date, 
+      projectId: selectedProjId, 
+      employeeId: selectedEmpId, 
+      vehicle, 
+      startTime, 
+      endTime, 
+      osNumber: selectedProject?.osNumber
     }));
     setSchedules((prev: Schedule[]) => [...prev.filter(s => !(s.employeeId === selectedEmpId && selectedDates.includes(s.date))), ...newSchedules]);
     setSelectedDates([]);
@@ -195,7 +227,7 @@ const ScheduleView: React.FC<{ projects: ManagerProject[], employees: Employee[]
             <div><label className="text-xs text-nexus-400">Início</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white"/></div>
             <div><label className="text-xs text-nexus-400">Fim</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white"/></div>
           </div>
-          <div><label className="text-xs text-nexus-400">Veículo</label><input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white"/></div>
+          <div><label className="text-xs text-nexus-400">Veículo (VT)</label><input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="VT ou Placa"/></div>
           
           <div className="bg-nexus-900/50 p-3 rounded-xl border border-nexus-700">
              <div className="flex justify-between items-center mb-2">
@@ -292,7 +324,7 @@ const AbsenceView: React.FC<{ employees: Employee[], absences: Absence[], setAbs
 // 4. PROJECTS VIEW
 const ProjectsView: React.FC<{ projects: ManagerProject[], setProjects: any }> = ({ projects, setProjects }) => {
   const [isForm, setIsForm] = useState(false);
-  const [form, setForm] = useState<any>({ name: '', bu: BU.BUINFRA, hoursSold: 0 });
+  const [form, setForm] = useState<any>({ name: '', bu: BU.BUINFRA, hoursSold: 0, client: '', costCenter: '', osNumber: '', location: '', address: '' });
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,6 +350,7 @@ const ProjectsView: React.FC<{ projects: ManagerProject[], setProjects: any }> =
                       <div className="flex gap-2"><Building2 size={16}/> {p.client}</div>
                       <div className="flex gap-2"><FileText size={16}/> {p.osNumber}</div>
                       <div className="flex gap-2"><MapPin size={16}/> {p.location}</div>
+                      <div className="flex gap-2"><span className="font-bold">C/C:</span> {p.costCenter}</div>
                    </div>
                 </div>
               </div>
@@ -328,12 +361,22 @@ const ProjectsView: React.FC<{ projects: ManagerProject[], setProjects: any }> =
         <div className="max-w-2xl mx-auto bg-nexus-800 p-8 rounded-xl border border-nexus-700">
           <h3 className="text-xl font-bold text-white mb-6">Novo Projeto</h3>
           <form onSubmit={handleSave} className="space-y-4">
-             <div><label className="text-nexus-400 text-xs">Nome</label><input required className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.name} onChange={e => setForm({...form, name: e.target.value})}/></div>
+             <div><label className="text-nexus-400 text-xs">Nome do Projeto</label><input required className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.name} onChange={e => setForm({...form, name: e.target.value})}/></div>
              <div><label className="text-nexus-400 text-xs">Cliente</label><input required className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.client} onChange={e => setForm({...form, client: e.target.value})}/></div>
+             
+             {/* New Fields Requested */}
+             <div className="grid grid-cols-2 gap-4">
+               <div><label className="text-nexus-400 text-xs">Centro de Controle (C/C)</label><input required className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.costCenter} onChange={e => setForm({...form, costCenter: e.target.value})}/></div>
+               <div><label className="text-nexus-400 text-xs">Nº OS</label><input required className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.osNumber} onChange={e => setForm({...form, osNumber: e.target.value})}/></div>
+             </div>
+
              <div className="grid grid-cols-2 gap-4">
                <div><label className="text-nexus-400 text-xs">BU</label><select className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.bu} onChange={e => setForm({...form, bu: e.target.value})}>{Object.values(BU).map(b => <option key={b} value={b}>{b}</option>)}</select></div>
-               <div><label className="text-nexus-400 text-xs">Horas</label><input type="number" className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.hoursSold} onChange={e => setForm({...form, hoursSold: Number(e.target.value)})}/></div>
+               <div><label className="text-nexus-400 text-xs">Horas Vendidas</label><input type="number" className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.hoursSold} onChange={e => setForm({...form, hoursSold: Number(e.target.value)})}/></div>
              </div>
+             
+             <div><label className="text-nexus-400 text-xs">Localidade/Endereço (Usado como OBS)</label><input className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" value={form.location} onChange={e => setForm({...form, location: e.target.value})}/></div>
+
              <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setIsForm(false)} className="px-4 py-2 text-nexus-400 hover:text-white">Cancelar</button>
                 <button className="px-6 py-2 bg-blue-600 text-white rounded-lg">Salvar</button>
@@ -390,24 +433,34 @@ const ReportsView: React.FC<{ schedules: Schedule[], employees: Employee[], proj
             </div>
             <table className="w-full text-xs text-left border-collapse">
                <thead>
-                  <tr className="bg-gray-100 uppercase border-b border-gray-300">
+                  <tr className="bg-gray-100 uppercase border-b border-gray-300 text-[10px] tracking-wider">
                     <th className="p-2 border">Data</th>
                     <th className="p-2 border">Colaborador</th>
                     <th className="p-2 border">Obra</th>
-                    <th className="p-2 border">Veículo</th>
-                    <th className="p-2 border">Horário</th>
+                    <th className="p-2 border text-center">C/C</th>
+                    <th className="p-2 border text-center">OS</th>
+                    <th className="p-2 border text-center">VT</th>
+                    <th className="p-2 border">OBS (Local)</th>
+                    <th className="p-2 border text-center">Horário</th>
                   </tr>
                </thead>
                <tbody>
-                  {schedules.sort((a,b) => a.date.localeCompare(b.date)).map(s => (
-                    <tr key={s.id} className="border-b border-gray-200">
-                       <td className="p-2 border">{new Date(s.date).toLocaleDateString()}</td>
-                       <td className="p-2 border font-bold">{employees.find(e => e.id === s.employeeId)?.name}</td>
-                       <td className="p-2 border">{projects.find(p => p.id === s.projectId)?.name}</td>
-                       <td className="p-2 border">{s.vehicle}</td>
-                       <td className="p-2 border">{s.startTime} - {s.endTime}</td>
-                    </tr>
-                  ))}
+                  {schedules.sort((a,b) => a.date.localeCompare(b.date)).map(s => {
+                    const emp = employees.find(e => e.id === s.employeeId);
+                    const proj = projects.find(p => p.id === s.projectId);
+                    return (
+                        <tr key={s.id} className="border-b border-gray-200 hover:bg-gray-50">
+                           <td className="p-2 border font-medium">{new Date(s.date).toLocaleDateString()}</td>
+                           <td className="p-2 border font-bold text-blue-800">{emp?.name}</td>
+                           <td className="p-2 border">{proj?.name}</td>
+                           <td className="p-2 border text-center font-mono">{proj?.costCenter}</td>
+                           <td className="p-2 border text-center">{s.osNumber || proj?.osNumber}</td>
+                           <td className="p-2 border text-center">{s.vehicle || 'VT'}</td>
+                           <td className="p-2 border text-gray-600">{proj?.location}</td>
+                           <td className="p-2 border text-center">{s.startTime} - {s.endTime}</td>
+                        </tr>
+                    );
+                  })}
                </tbody>
             </table>
         </div>
@@ -419,10 +472,12 @@ const ReportsView: React.FC<{ schedules: Schedule[], employees: Employee[], proj
 
 export const TeleinfoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [projects, setProjects] = useState<ManagerProject[]>(INITIAL_PROJECTS);
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
-  const [schedules, setSchedules] = useState<Schedule[]>(INITIAL_SCHEDULES);
-  const [absences, setAbsences] = useState<Absence[]>(INITIAL_ABSENCES);
+  
+  // Persisted States using LocalStorage
+  const [projects, setProjects] = useLocalStorage<ManagerProject[]>('nexus_manager_projects', INITIAL_PROJECTS);
+  const [employees, setEmployees] = useLocalStorage<Employee[]>('nexus_manager_employees', INITIAL_EMPLOYEES);
+  const [schedules, setSchedules] = useLocalStorage<Schedule[]>('nexus_manager_schedules', INITIAL_SCHEDULES);
+  const [absences, setAbsences] = useLocalStorage<Absence[]>('nexus_manager_absences', INITIAL_ABSENCES);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell 
@@ -359,7 +360,8 @@ const MonitoringView: React.FC = () => {
     const [projects, setProjects] = useLocalStorage<DetailedProject[]>('nexus_teleinfo_detailed_projects', []);
     const [selectedId, setSelectedId] = useState<string>('new');
     const [current, setCurrent] = useState<DetailedProject>({
-        id: '', name: '', start: '', end: '', steps: [], 
+        id: '', name: '', start: '', end: '', costCenter: '',
+        steps: [], 
         soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 }, 
         usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
     });
@@ -368,7 +370,7 @@ const MonitoringView: React.FC = () => {
     useEffect(() => {
         if (selectedId === 'new') {
             setCurrent({
-                id: '', name: '', start: '', end: '', 
+                id: '', name: '', start: '', end: '', costCenter: '',
                 steps: [{ name: 'Planejamento', perc: 0 }, { name: 'Execução', perc: 0 }, { name: 'Entrega', perc: 0 }],
                 soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 },
                 usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
@@ -419,6 +421,10 @@ const MonitoringView: React.FC = () => {
                         <div>
                             <label className="text-xs text-nexus-400 mb-1 block">Nome do Projeto</label>
                             <input type="text" value={current.name} onChange={e => setCurrent({...current, name: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="Ex: Migração Data Center" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-nexus-400 mb-1 block">Centro de Controle (C/C)</label>
+                            <input type="text" value={current.costCenter || ''} onChange={e => setCurrent({...current, costCenter: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="Ex: 10.01.01" />
                         </div>
                         <div>
                             <label className="text-xs text-nexus-400 mb-1 block">Data Início</label>

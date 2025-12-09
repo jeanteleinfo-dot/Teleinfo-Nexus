@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -83,8 +84,16 @@ export const Login: React.FC = () => {
             Entrar
           </button>
         </form>
+        
+        <div className="mt-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
+           <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
+           <p className="text-xs text-yellow-200/80 text-left">
+             <span className="font-bold text-yellow-500 block mb-1">Aviso de Sincronização:</span>
+             Este é um sistema de front-end. Os usuários e dados criados são salvos apenas no <strong>Navegador Atual</strong> deste dispositivo. Contas criadas em um computador não estarão visíveis em outro.
+           </p>
+        </div>
 
-        <div className="mt-8 text-center">
+        <div className="mt-6 text-center">
           <p className="text-xs text-nexus-500">
             Acesso Restrito: <span className="text-nexus-300 font-mono">Jean.Mendes</span>
           </p>

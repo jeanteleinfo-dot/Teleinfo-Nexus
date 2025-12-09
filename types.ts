@@ -68,6 +68,7 @@ export interface DetailedProject {
     name: string;
     start: string;
     end: string;
+    costCenter?: string; // Campo Adicionado
     steps: DetailedProjectStep[];
     soldHours: BuHours;
     usedHours: BuHours;
