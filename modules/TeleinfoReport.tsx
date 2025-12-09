@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
-  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User 
+  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar 
 } from 'lucide-react';
 import { generateProjectRiskAnalysis, generateDetailedProjectRiskAnalysis } from '../services/geminiService';
 import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep } from '../types';
@@ -358,91 +358,191 @@ const DashboardView: React.FC<{ projects: Project[], onDataLoaded: (data: Projec
 
 const MonitoringView: React.FC = () => {
     const [projects, setProjects] = useLocalStorage<DetailedProject[]>('nexus_teleinfo_detailed_projects', []);
-    const [selectedId, setSelectedId] = useState<string>('new');
-    const [current, setCurrent] = useState<DetailedProject>({
+    const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
+    const [riskModal, setRiskModal] = useState({ isOpen: false, content: '', isLoading: false });
+    
+    // State for the project being edited
+    const [editingProject, setEditingProject] = useState<DetailedProject>({
         id: '', name: '', start: '', end: '', costCenter: '',
         steps: [], 
         soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 }, 
         usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
     });
-    const [riskModal, setRiskModal] = useState({ isOpen: false, content: '', isLoading: false });
 
-    useEffect(() => {
-        if (selectedId === 'new') {
-            setCurrent({
-                id: '', name: '', start: '', end: '', costCenter: '',
-                steps: [{ name: 'Planejamento', perc: 0 }, { name: 'Execução', perc: 0 }, { name: 'Entrega', perc: 0 }],
-                soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 },
-                usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
-            });
-        } else {
-            const found = projects.find(p => p.id === selectedId);
-            if (found) setCurrent(found);
+    const handleNewProject = () => {
+        setEditingProject({
+            id: '', 
+            name: '', 
+            start: new Date().toISOString().split('T')[0], 
+            end: '', 
+            costCenter: '',
+            steps: [{ name: 'Planejamento', perc: 0 }, { name: 'Execução', perc: 0 }, { name: 'Entrega', perc: 0 }],
+            soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 },
+            usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
+        });
+        setViewMode('form');
+    };
+
+    const handleEditProject = (project: DetailedProject) => {
+        setEditingProject({ ...project }); // Clone to avoid direct mutation
+        setViewMode('form');
+    };
+
+    const handleDeleteProject = (id: string) => {
+        if (confirm("Tem certeza que deseja excluir este projeto?")) {
+            setProjects(projects.filter(p => p.id !== id));
         }
-    }, [selectedId, projects]);
+    };
 
     const handleSave = () => {
-        if (!current.name) return alert("Nome obrigatório");
-        if (selectedId === 'new') {
-            const newProj = { ...current, id: Date.now().toString() };
-            setProjects([...projects, newProj]);
-            setSelectedId(newProj.id);
+        if (!editingProject.name) return alert("Nome do projeto é obrigatório");
+        
+        let updatedList: DetailedProject[];
+
+        if (editingProject.id) {
+            // Update existing
+            updatedList = projects.map(p => p.id === editingProject.id ? editingProject : p);
         } else {
-            setProjects(projects.map(p => p.id === selectedId ? current : p));
+            // Create new
+            const newProject = { ...editingProject, id: Date.now().toString() };
+            updatedList = [...projects, newProject];
         }
+
+        setProjects(updatedList);
+        setViewMode('list');
         alert("Projeto salvo com sucesso!");
     };
 
-    const handleAnalyze = async () => {
+    const handleAnalyze = async (project: DetailedProject) => {
         setRiskModal({ isOpen: true, content: '', isLoading: true });
-        const result = await generateDetailedProjectRiskAnalysis(current);
+        const result = await generateDetailedProjectRiskAnalysis(project);
         setRiskModal({ isOpen: true, content: result, isLoading: false });
     };
 
-    const hoursData = Object.keys(current.soldHours).map(key => {
+    // Render List View
+    if (viewMode === 'list') {
+        return (
+            <div className="space-y-6 animate-fadeIn">
+                 {riskModal.isOpen && <RiskAnalysisModal title="Auditoria de Projeto IA" content={riskModal.content} isLoading={riskModal.isLoading} onClose={() => setRiskModal({ ...riskModal, isOpen: false })} />}
+                
+                <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-white">Auditoria Detalhada de Obras</h3>
+                    <button onClick={handleNewProject} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-blue-900/20">
+                        <Plus size={18} /> Novo Projeto
+                    </button>
+                </div>
+
+                <div className="bg-nexus-800 rounded-xl border border-nexus-700 overflow-hidden">
+                    {projects.length === 0 ? (
+                        <div className="p-12 text-center flex flex-col items-center justify-center text-nexus-400">
+                            <BrainCircuit size={48} className="mb-4 opacity-50" />
+                            <p className="text-lg">Nenhuma obra detalhada cadastrada.</p>
+                            <p className="text-sm">Clique em "Novo Projeto" para começar a monitorar.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm text-nexus-300">
+                                <thead className="bg-nexus-900/50 text-nexus-400 uppercase font-medium text-xs">
+                                    <tr>
+                                        <th className="px-6 py-4">Projeto</th>
+                                        <th className="px-6 py-4">Centro de Custo</th>
+                                        <th className="px-6 py-4">Início</th>
+                                        <th className="px-6 py-4">Término</th>
+                                        <th className="px-6 py-4 text-center">Progresso</th>
+                                        <th className="px-6 py-4 text-right">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-nexus-700">
+                                    {projects.map((p) => {
+                                         const globalPerc = p.steps.length > 0 
+                                            ? Math.round(p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length)
+                                            : 0;
+                                        return (
+                                            <tr key={p.id} className="hover:bg-nexus-700/30 transition-colors">
+                                                <td className="px-6 py-4 font-medium text-white">{p.name}</td>
+                                                <td className="px-6 py-4 font-mono">{p.costCenter || '-'}</td>
+                                                <td className="px-6 py-4">{p.start ? new Date(p.start).toLocaleDateString() : '-'}</td>
+                                                <td className="px-6 py-4">{p.end ? new Date(p.end).toLocaleDateString() : '-'}</td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <div className="w-16 h-1.5 bg-nexus-700 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${globalPerc}%` }}></div>
+                                                        </div>
+                                                        <span className="text-xs">{globalPerc}%</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={() => handleAnalyze(p)} className="p-2 bg-purple-500/10 text-purple-400 hover:bg-purple-500 hover:text-white rounded-lg transition-colors" title="Auditoria IA">
+                                                            <Bot size={16} />
+                                                        </button>
+                                                        <button onClick={() => handleEditProject(p)} className="p-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-lg transition-colors" title="Editar">
+                                                            <Edit size={16} />
+                                                        </button>
+                                                        <button onClick={() => handleDeleteProject(p.id)} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-colors" title="Excluir">
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // Render Form View
+    const hoursData = Object.keys(editingProject.soldHours).map(key => {
         const k = key as keyof BuHours;
-        return { name: k.toUpperCase(), Sold: current.soldHours[k], Used: current.usedHours[k] };
+        return { name: k.toUpperCase(), Sold: editingProject.soldHours[k], Used: editingProject.usedHours[k] };
     });
 
     return (
         <div className="space-y-6 animate-fadeIn">
-             {riskModal.isOpen && <RiskAnalysisModal title="Auditoria de Projeto IA" content={riskModal.content} isLoading={riskModal.isLoading} onClose={() => setRiskModal({ ...riskModal, isOpen: false })} />}
-            
+            {riskModal.isOpen && <RiskAnalysisModal title="Auditoria de Projeto IA" content={riskModal.content} isLoading={riskModal.isLoading} onClose={() => setRiskModal({ ...riskModal, isOpen: false })} />}
+
+            <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => setViewMode('list')} className="p-2 bg-nexus-800 text-nexus-400 hover:text-white rounded-lg border border-nexus-700 hover:border-nexus-500 transition-colors">
+                    <ArrowLeft size={20} />
+                </button>
+                <h3 className="text-xl font-bold text-white">{editingProject.id ? 'Editar Projeto' : 'Novo Projeto'}</h3>
+            </div>
+
             <div className="bg-nexus-800 border border-nexus-700 rounded-xl p-6 flex flex-col md:flex-row gap-6 items-end">
                 <div className="flex-1 w-full space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs text-nexus-400 mb-1 block">Selecionar Projeto</label>
-                            <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white">
-                                <option value="new">+ Novo Projeto</option>
-                                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
                             <label className="text-xs text-nexus-400 mb-1 block">Nome do Projeto</label>
-                            <input type="text" value={current.name} onChange={e => setCurrent({...current, name: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="Ex: Migração Data Center" />
+                            <input type="text" value={editingProject.name} onChange={e => setEditingProject({...editingProject, name: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="Ex: Migração Data Center" />
                         </div>
                         <div>
                             <label className="text-xs text-nexus-400 mb-1 block">Centro de Controle (C/C)</label>
-                            <input type="text" value={current.costCenter || ''} onChange={e => setCurrent({...current, costCenter: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="Ex: 10.01.01" />
+                            <input type="text" value={editingProject.costCenter || ''} onChange={e => setEditingProject({...editingProject, costCenter: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" placeholder="Ex: 10.01.01" />
                         </div>
                         <div>
                             <label className="text-xs text-nexus-400 mb-1 block">Data Início</label>
-                            <input type="date" value={current.start} onChange={e => setCurrent({...current, start: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" />
+                            <input type="date" value={editingProject.start} onChange={e => setEditingProject({...editingProject, start: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" />
                         </div>
                         <div>
                             <label className="text-xs text-nexus-400 mb-1 block">Data Término</label>
-                            <input type="date" value={current.end} onChange={e => setCurrent({...current, end: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" />
+                            <input type="date" value={editingProject.end} onChange={e => setEditingProject({...editingProject, end: e.target.value})} className="w-full bg-nexus-900 border border-nexus-600 rounded-lg p-2 text-white" />
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium">
+                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-green-900/20">
                         <Save size={18} /> Salvar
                     </button>
-                    <button onClick={handleAnalyze} disabled={selectedId === 'new'} className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium">
-                        <Bot size={18} /> Auditoria IA
-                    </button>
+                    {editingProject.id && (
+                        <button onClick={() => handleAnalyze(editingProject)} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-purple-900/20">
+                            <Bot size={18} /> Auditoria IA
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -450,22 +550,22 @@ const MonitoringView: React.FC = () => {
                 <div className="bg-nexus-800 border border-nexus-700 rounded-xl p-6">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-white font-semibold">Etapas e Progresso</h3>
-                        <button onClick={() => setCurrent({...current, steps: [...current.steps, {name: 'Nova Etapa', perc: 0}]})} className="text-blue-400 text-sm hover:underline flex items-center gap-1"><Plus size={14}/> Adicionar</button>
+                        <button onClick={() => setEditingProject({...editingProject, steps: [...editingProject.steps, {name: 'Nova Etapa', perc: 0}]})} className="text-blue-400 text-sm hover:underline flex items-center gap-1"><Plus size={14}/> Adicionar</button>
                     </div>
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                        {current.steps.map((step, i) => (
+                        {editingProject.steps.map((step, i) => (
                             <div key={i} className="flex gap-2 items-center">
                                 <input type="text" value={step.name} onChange={e => {
-                                    const newSteps = [...current.steps];
+                                    const newSteps = [...editingProject.steps];
                                     newSteps[i].name = e.target.value;
-                                    setCurrent({...current, steps: newSteps});
+                                    setEditingProject({...editingProject, steps: newSteps});
                                 }} className="flex-1 bg-nexus-900 border border-nexus-600 rounded p-1.5 text-sm text-white" />
                                 <input type="number" min="0" max="100" value={step.perc} onChange={e => {
-                                    const newSteps = [...current.steps];
+                                    const newSteps = [...editingProject.steps];
                                     newSteps[i].perc = Number(e.target.value);
-                                    setCurrent({...current, steps: newSteps});
+                                    setEditingProject({...editingProject, steps: newSteps});
                                 }} className="w-16 bg-nexus-900 border border-nexus-600 rounded p-1.5 text-sm text-white text-center" />
-                                <button onClick={() => setCurrent({...current, steps: current.steps.filter((_, idx) => idx !== i)})} className="text-red-400 hover:bg-red-400/10 p-1.5 rounded"><Trash2 size={14}/></button>
+                                <button onClick={() => setEditingProject({...editingProject, steps: editingProject.steps.filter((_, idx) => idx !== i)})} className="text-red-400 hover:bg-red-400/10 p-1.5 rounded"><Trash2 size={14}/></button>
                             </div>
                         ))}
                     </div>
@@ -474,17 +574,17 @@ const MonitoringView: React.FC = () => {
                 <div className="bg-nexus-800 border border-nexus-700 rounded-xl p-6">
                     <h3 className="text-white font-semibold mb-4">Controle de Horas (Orçado vs Realizado)</h3>
                     <div className="grid grid-cols-2 gap-4 mb-6">
-                        {(Object.keys(current.soldHours) as Array<keyof BuHours>).map(bu => (
+                        {(Object.keys(editingProject.soldHours) as Array<keyof BuHours>).map(bu => (
                             <div key={bu} className="bg-nexus-900/50 p-3 rounded-lg border border-nexus-700">
                                 <span className="text-xs uppercase text-nexus-400 font-bold block mb-2">{bu}</span>
                                 <div className="flex gap-2">
                                     <div>
                                         <label className="text-[10px] text-nexus-500">Vendidas</label>
-                                        <input type="number" value={current.soldHours[bu]} onChange={e => setCurrent({...current, soldHours: {...current.soldHours, [bu]: Number(e.target.value)}})} className="w-full bg-nexus-800 border-none rounded text-green-400 text-sm font-bold p-1" />
+                                        <input type="number" value={editingProject.soldHours[bu]} onChange={e => setEditingProject({...editingProject, soldHours: {...editingProject.soldHours, [bu]: Number(e.target.value)}})} className="w-full bg-nexus-800 border-none rounded text-green-400 text-sm font-bold p-1" />
                                     </div>
                                     <div>
                                         <label className="text-[10px] text-nexus-500">Usadas</label>
-                                        <input type="number" value={current.usedHours[bu]} onChange={e => setCurrent({...current, usedHours: {...current.usedHours, [bu]: Number(e.target.value)}})} className="w-full bg-nexus-800 border-none rounded text-orange-400 text-sm font-bold p-1" />
+                                        <input type="number" value={editingProject.usedHours[bu]} onChange={e => setEditingProject({...editingProject, usedHours: {...editingProject.usedHours, [bu]: Number(e.target.value)}})} className="w-full bg-nexus-800 border-none rounded text-orange-400 text-sm font-bold p-1" />
                                     </div>
                                 </div>
                             </div>
