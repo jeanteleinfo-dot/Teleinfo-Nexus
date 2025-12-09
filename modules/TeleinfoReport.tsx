@@ -627,15 +627,30 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     const [isSlideMode, setIsSlideMode] = useState(false);
     const [slideIndex, setSlideIndex] = useState(0);
 
-    const summary = useMemo(() => {
-        let counts = { total: allProjects.length, finished: 0, inProgress: 0, paralyzed: 0, notStarted: 0 };
+    const portfolioStats = useMemo(() => {
+        const counts = { finished: 0, inProgress: 0, paralyzed: 0, notStarted: 0 };
+        const statusChart: Record<string, number> = {};
+        const buChart: Record<string, number> = {};
+
         allProjects.forEach(p => {
             if (p.STATUS.startsWith("FINALIZADO")) counts.finished++;
             else if (p.STATUS.startsWith("EM ANDAMENTO")) counts.inProgress++;
             else if (p.STATUS.startsWith("PARALIZADO")) counts.paralyzed++;
             else if (p.STATUS.startsWith("NÃO INICIADO")) counts.notStarted++;
+
+            statusChart[p.STATUS || "N/A"] = (statusChart[p.STATUS || "N/A"] || 0) + 1;
+            buChart[p.BUs || "N/A"] = (buChart[p.BUs || "N/A"] || 0) + 1;
         });
-        return counts;
+
+        const percAvg = allProjects.length ? allProjects.reduce((a, b) => a + (b.perc || 0), 0) / allProjects.length : 0;
+
+        return {
+            ...counts,
+            total: allProjects.length,
+            avg: percAvg.toFixed(1),
+            statusChart: Object.entries(statusChart).map(([k, v]) => ({ name: k, value: v, color: getStatusChartColor(k) })),
+            buChart: Object.entries(buChart).map(([k, v]) => ({ name: k, value: v, color: getBuChartColor(k) }))
+        };
     }, [allProjects]);
 
     const slides = useMemo(() => [
@@ -666,29 +681,62 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                  )) : <p className="text-gray-400 italic">Nenhum fato relevante registrado.</p>}
              </div>
         </Slide>,
-        // Slide 3: Portfolio
+        // Slide 3: Portfolio (Replicating General Dashboard Layout)
         <Slide key="portfolio">
-             <h2 className="text-3xl font-bold text-slate-800 mb-8 border-b pb-4">Visão do Portfólio</h2>
-             <div className="grid grid-cols-4 gap-4 mb-8">
-                 <div className="p-4 bg-blue-50 rounded-lg text-center"><div className="text-3xl font-bold text-blue-600">{summary.total}</div><div className="text-sm text-gray-500">Total Projetos</div></div>
-                 <div className="p-4 bg-green-50 rounded-lg text-center"><div className="text-3xl font-bold text-green-600">{summary.finished}</div><div className="text-sm text-gray-500">Finalizados</div></div>
-                 <div className="p-4 bg-orange-50 rounded-lg text-center"><div className="text-3xl font-bold text-orange-600">{summary.inProgress}</div><div className="text-sm text-gray-500">Em Andamento</div></div>
-                 <div className="p-4 bg-red-50 rounded-lg text-center"><div className="text-3xl font-bold text-red-600">{summary.paralyzed}</div><div className="text-sm text-gray-500">Paralisados</div></div>
-             </div>
-             <div className="h-64 bg-slate-50 rounded-lg p-4">
-                 <ResponsiveContainer>
-                     <BarChart data={[
-                         {name: 'Finalizados', val: summary.finished, fill: '#22c55e'},
-                         {name: 'Andamento', val: summary.inProgress, fill: '#3b82f6'},
-                         {name: 'Paralisados', val: summary.paralyzed, fill: '#ef4444'},
-                         {name: 'N. Iniciado', val: summary.notStarted, fill: '#eab308'},
-                     ]}>
-                         <CartesianGrid strokeDasharray="3 3" />
-                         <XAxis dataKey="name" />
-                         <Bar dataKey="val" />
-                     </BarChart>
-                 </ResponsiveContainer>
-             </div>
+             <h2 className="text-3xl font-bold text-slate-800 mb-6 border-b pb-2">Visão do Portfólio</h2>
+             
+             {/* Metric Cards Grid */}
+             <div className="grid grid-cols-7 gap-2 mb-6">
+                {[
+                    { label: 'Total', val: portfolioStats.total, color: 'text-slate-700', bg: 'bg-slate-100', icon: FileText },
+                    { label: 'Monitorados', val: detailedProjects.length, color: 'text-orange-600', bg: 'bg-orange-50', icon: GanttChartSquare },
+                    { label: 'Média %', val: `${portfolioStats.avg}%`, color: 'text-blue-600', bg: 'bg-blue-50', icon: FileText },
+                    { label: 'Finalizados', val: portfolioStats.finished, color: 'text-green-600', bg: 'bg-green-50', icon: FileText },
+                    { label: 'Andamento', val: portfolioStats.inProgress, color: 'text-blue-600', bg: 'bg-blue-50', icon: FileText },
+                    { label: 'Paralisados', val: portfolioStats.paralyzed, color: 'text-red-600', bg: 'bg-red-50', icon: FileText },
+                    { label: 'N. Iniciado', val: portfolioStats.notStarted, color: 'text-yellow-600', bg: 'bg-yellow-50', icon: FileText },
+                ].map((c, i) => (
+                    <div key={i} className={`${c.bg} p-2 rounded-lg flex flex-col items-center justify-center text-center border border-slate-200`}>
+                        <c.icon size={16} className={`mb-1 ${c.color} opacity-80`} />
+                        <span className="text-slate-500 text-[10px] uppercase font-bold">{c.label}</span>
+                        <span className={`text-lg font-bold ${c.color}`}>{c.val}</span>
+                    </div>
+                ))}
+            </div>
+
+            {/* Charts Grid */}
+            <div className="grid grid-cols-2 gap-6 h-full pb-8">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h3 className="text-slate-700 font-semibold mb-4">Projetos por Status</h3>
+                    <div className="h-64">
+                        <ResponsiveContainer>
+                            <BarChart data={portfolioStats.statusChart}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                                <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 10}} />
+                                <YAxis tick={{fill: '#64748b'}} />
+                                <Bar dataKey="value">
+                                    {portfolioStats.statusChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h3 className="text-slate-700 font-semibold mb-4">Por Unidade de Negócio</h3>
+                    <div className="h-64">
+                        <ResponsiveContainer>
+                            <BarChart data={portfolioStats.buChart}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                                <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 10}} />
+                                <YAxis tick={{fill: '#64748b'}} />
+                                <Bar dataKey="value">
+                                    {portfolioStats.buChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
         </Slide>,
         // Detailed Projects Slides
         ...detailedProjects.map(p => {
@@ -782,7 +830,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                  )) : <p className="text-gray-400 italic">Nenhum próximo passo registrado.</p>}
              </div>
         </Slide>
-    ], [summary, keyFacts, detailedProjects, nextSteps]);
+    ], [portfolioStats, keyFacts, detailedProjects, nextSteps]);
 
     const generatePdf = () => {
         const element = document.getElementById('presentation-content');
@@ -869,49 +917,40 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
 };
 
 export const TeleinfoReport: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
     const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects_cache', []);
-    const [fileName, setFileName] = useState<string>('Dados em Cache');
+    const [fileName, setFileName] = useLocalStorage<string>('nexus_teleinfo_filename', '');
 
-    const handleDataLoaded = (data: Project[], name: string) => {
+    const handleDataLoaded = (data: Project[], file: string) => {
         setProjects(data);
-        setFileName(name);
+        setFileName(file);
     };
 
     return (
         <div className="flex flex-col h-full space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Relatórios Inteligentes IA</h2>
-                    <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Status Report</p>
+                  <h2 className="text-2xl font-bold text-white">Relatórios Inteligentes</h2>
+                  <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Apresentações</p>
                 </div>
                 <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
-                    {[
-                        { id: 'dashboard', label: 'Visão Geral', icon: FileText },
-                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
-                        { id: 'presentation', label: 'Apresentação', icon: Tv },
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                                activeTab === tab.id 
-                                ? 'bg-blue-600 text-white shadow-lg' 
-                                : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
-                            }`}
-                        >
-                            <tab.icon size={16} />
-                            {tab.label}
-                        </button>
-                    ))}
+                    <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white hover:bg-nexus-700'}`}>
+                        Dashboard Geral
+                    </button>
+                    <button onClick={() => setView('monitoring')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'monitoring' ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white hover:bg-nexus-700'}`}>
+                        Auditoria Detalhada
+                    </button>
+                    <button onClick={() => setView('presentation')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${view === 'presentation' ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white hover:bg-nexus-700'}`}>
+                        Gerador Apresentação
+                    </button>
                 </div>
-            </div>
+              </div>
 
-            <div className="flex-1 min-h-0">
-                {activeTab === 'dashboard' && <DashboardView projects={projects} onDataLoaded={handleDataLoaded} fileName={fileName} />}
-                {activeTab === 'monitoring' && <MonitoringView />}
-                {activeTab === 'presentation' && <PresentationView allProjects={projects} />}
-            </div>
+              <div className="flex-1 min-h-0">
+                  {view === 'dashboard' && <DashboardView projects={projects} onDataLoaded={handleDataLoaded} fileName={fileName} />}
+                  {view === 'monitoring' && <MonitoringView />}
+                  {view === 'presentation' && <PresentationView allProjects={projects} />}
+              </div>
         </div>
     );
 };
