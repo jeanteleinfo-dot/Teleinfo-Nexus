@@ -909,8 +909,8 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
             margin: 0,
             filename: `Relatorio_Status_Nexus_${new Date().toISOString().split('T')[0]}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
         };
         // @ts-ignore
         html2pdf().from(element).set(opt).save();
@@ -919,15 +919,17 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     return (
         <div className="space-y-6 animate-fadeIn">
             {isSlideMode && (
-                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-                    <div className="w-full max-w-6xl aspect-video bg-white">
-                        {slides[slideIndex]}
+                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-0">
+                    <div className="w-full h-full flex items-center justify-center">
+                        <div className="aspect-video w-full max-h-full max-w-full bg-white shadow-2xl overflow-hidden">
+                            {slides[slideIndex]}
+                        </div>
                     </div>
-                    <div className="absolute bottom-4 flex gap-4 text-white">
-                        <button onClick={() => setSlideIndex(Math.max(0, slideIndex - 1))}><ArrowLeft size={32}/></button>
-                        <span>{slideIndex + 1} / {slides.length}</span>
-                        <button onClick={() => setSlideIndex(Math.min(slides.length - 1, slideIndex + 1))}><ArrowRight size={32}/></button>
-                        <button onClick={() => setIsSlideMode(false)}><X size={32}/></button>
+                    <div className="absolute bottom-4 flex gap-4 text-white bg-black/50 p-2 rounded-full backdrop-blur-sm">
+                        <button onClick={() => setSlideIndex(Math.max(0, slideIndex - 1))} className="hover:text-blue-400"><ArrowLeft size={32}/></button>
+                        <span className="flex items-center text-lg font-mono">{slideIndex + 1} / {slides.length}</span>
+                        <button onClick={() => setSlideIndex(Math.min(slides.length - 1, slideIndex + 1))} className="hover:text-blue-400"><ArrowRight size={32}/></button>
+                        <button onClick={() => setIsSlideMode(false)} className="hover:text-red-400 ml-4"><X size={32}/></button>
                     </div>
                 </div>
             )}
@@ -979,18 +981,22 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                 </div>
             </div>
 
-            <div id="presentation-content" className="bg-gray-200 p-8 rounded-xl space-y-8 overflow-hidden">
-                <p className="text-center text-gray-500 text-sm mb-4">Pré-visualização do Relatório (Conteúdo gerado para PDF)</p>
-                {slides.map((slide, i) => <div key={i} className="transform scale-95 origin-center shadow-lg">{slide}</div>)}
+            <p className="text-center text-gray-500 text-sm mt-4 mb-2">Pré-visualização do Relatório (Conteúdo gerado para PDF)</p>
+            <div id="presentation-content" className="bg-gray-800 p-0 rounded-none overflow-hidden">
+                {slides.map((slide, i) => (
+                    <div key={i} className="w-full page-break-after-always">
+                        {React.cloneElement(slide as React.ReactElement, { className: 'w-full shadow-none rounded-none m-0 border-none' })}
+                    </div>
+                ))}
             </div>
         </div>
     );
 };
 
 export const TeleinfoReport: React.FC = () => {
-    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects', []);
-    const [fileName, setFileName] = useState('');
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
+    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects_cache', []);
+    const [fileName, setFileName] = useLocalStorage<string>('nexus_teleinfo_filename', 'Nenhum arquivo carregado');
 
     const handleDataLoaded = (data: Project[], name: string) => {
         setProjects(data);
@@ -1001,19 +1007,19 @@ export const TeleinfoReport: React.FC = () => {
         <div className="flex flex-col h-full space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Relatórios Inteligentes IA</h2>
-                    <p className="text-nexus-400">Análise de Projetos e Geração de Status Report</p>
+                    <h2 className="text-2xl font-bold text-white">Relatórios IA</h2>
+                    <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Apresentações</p>
                 </div>
-                <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
+                <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700 overflow-x-auto">
                     {[
-                        { id: 'dashboard', label: 'Dashboard Geral', icon: FileText },
-                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: GanttChartSquare },
+                        { id: 'dashboard', label: 'Visão Geral', icon: FileText },
+                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
                         { id: 'presentation', label: 'Apresentação', icon: Tv },
                     ].map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                                 activeTab === tab.id 
                                 ? 'bg-blue-600 text-white shadow-lg' 
                                 : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
