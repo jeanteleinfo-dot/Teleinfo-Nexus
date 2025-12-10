@@ -5,10 +5,10 @@ import {
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
-  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers, Activity
+  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers, Activity, Radar
 } from 'lucide-react';
 import { generateProjectRiskAnalysis, generateDetailedProjectRiskAnalysis } from '../services/geminiService';
-import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject, ProductionData } from '../types';
+import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject, ProductionData, FutureDelivery } from '../types';
 
 // Declare html2pdf for TypeScript since it is loaded via CDN
 declare const html2pdf: any;
@@ -110,6 +110,41 @@ const parseProductionCsv = (text: string): ProductionData[] => {
             date: isoDate,
             meta: parseFloat(metaStr.replace(',', '.') || '0'),
             realized: parseFloat(realizedStr?.replace(',', '.') || '0')
+        });
+    }
+    return result;
+};
+
+const parseFutureDeliveriesCsv = (text: string): FutureDelivery[] => {
+    // Format: Título;Fase atual;Cliente;Nº Projeto (Centro de controle);Entrega Teleinfo
+    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const result: FutureDelivery[] = [];
+
+    // Find Header index if strictly needed, but let's assume standard format from prompt
+    // Start from 1 to skip header
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(';');
+        if (cols.length < 4) continue;
+
+        const title = cols[0]?.trim();
+        const phase = cols[1]?.trim();
+        const client = cols[2]?.trim();
+        const projectNumber = cols[3]?.trim();
+        let deliveryDate = cols[4]?.trim() || "";
+
+        // Attempt to clean date if it has format YYYY-MM-DD HH:mm:ss
+        if (deliveryDate && deliveryDate.includes(' ')) {
+            deliveryDate = deliveryDate.split(' ')[0];
+        }
+
+        result.push({
+            id: `fd-${i}-${Date.now()}`,
+            title,
+            phase,
+            client,
+            projectNumber,
+            deliveryDate
         });
     }
     return result;
@@ -753,6 +788,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     const [nextSteps, setNextSteps] = useLocalStorage<NextStep[]>('nexus_teleinfo_nextsteps', []);
     const [detailedProjects] = useLocalStorage<DetailedProject[]>('nexus_teleinfo_detailed_projects', []);
     const [multiPhaseProjects] = useLocalStorage<MultiPhaseProject[]>('nexus_stock_multiphase_projects', []);
+    const [futureDeliveries, setFutureDeliveries] = useLocalStorage<FutureDelivery[]>('nexus_teleinfo_future_deliveries', []);
     
     // Inputs
     const [factText, setFactText] = useState('');
@@ -785,6 +821,18 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isSlideMode]); // slides is memoized, but slideIndex handled by state setter fn
+
+    const handleFutureDeliveriesCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const parsed = parseFutureDeliveriesCsv(evt.target?.result as string);
+            setFutureDeliveries(parsed);
+            alert(`${parsed.length} entregas futuras carregadas!`);
+        };
+        reader.readAsText(file);
+    };
 
     const portfolioStats = useMemo(() => {
         const counts = { finished: 0, inProgress: 0, paralyzed: 0, notStarted: 0 };
@@ -863,58 +911,107 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
         <Slide key="portfolio">
              <h2 className="text-3xl font-bold text-slate-800 mb-6 border-b pb-2">Visão do Portfólio</h2>
              
-             {/* Metric Cards Grid */}
-             <div className="grid grid-cols-7 gap-2 mb-6">
-                {[
-                    { label: 'Total', val: portfolioStats.total, color: 'text-slate-700', bg: 'bg-slate-100', icon: FileText },
-                    { label: 'Monitorados', val: detailedProjects.length, color: 'text-orange-600', bg: 'bg-orange-50', icon: GanttChartSquare },
-                    { label: 'Média %', val: `${portfolioStats.avg}%`, color: 'text-blue-600', bg: 'bg-blue-50', icon: FileText },
-                    { label: 'Finalizados', val: portfolioStats.finished, color: 'text-green-600', bg: 'bg-green-50', icon: FileText },
-                    { label: 'Andamento', val: portfolioStats.inProgress, color: 'text-blue-600', bg: 'bg-blue-50', icon: FileText },
-                    { label: 'Paralisados', val: portfolioStats.paralyzed, color: 'text-red-600', bg: 'bg-red-50', icon: FileText },
-                    { label: 'N. Iniciado', val: portfolioStats.notStarted, color: 'text-yellow-600', bg: 'bg-yellow-50', icon: FileText },
-                ].map((c, i) => (
-                    <div key={i} className={`${c.bg} p-2 rounded-lg flex flex-col items-center justify-center text-center border border-slate-200`}>
-                        <c.icon size={16} className={`mb-1 ${c.color} opacity-80`} />
-                        <span className="text-slate-500 text-[10px] uppercase font-bold">{c.label}</span>
-                        <span className={`text-lg font-bold ${c.color}`}>{c.val}</span>
-                    </div>
-                ))}
-            </div>
+             <div className="flex flex-col h-full">
+                {/* Metric Cards Grid */}
+                <div className="grid grid-cols-7 gap-2 mb-4 shrink-0">
+                    {[
+                        { label: 'Total', val: portfolioStats.total, color: 'text-slate-700', bg: 'bg-slate-100', icon: FileText },
+                        { label: 'Monitorados', val: detailedProjects.length, color: 'text-orange-600', bg: 'bg-orange-50', icon: GanttChartSquare },
+                        { label: 'Média %', val: `${portfolioStats.avg}%`, color: 'text-blue-600', bg: 'bg-blue-50', icon: FileText },
+                        { label: 'Finalizados', val: portfolioStats.finished, color: 'text-green-600', bg: 'bg-green-50', icon: FileText },
+                        { label: 'Andamento', val: portfolioStats.inProgress, color: 'text-blue-600', bg: 'bg-blue-50', icon: FileText },
+                        { label: 'Paralisados', val: portfolioStats.paralyzed, color: 'text-red-600', bg: 'bg-red-50', icon: FileText },
+                        { label: 'N. Iniciado', val: portfolioStats.notStarted, color: 'text-yellow-600', bg: 'bg-yellow-50', icon: FileText },
+                    ].map((c, i) => (
+                        <div key={i} className={`${c.bg} p-2 rounded-lg flex flex-col items-center justify-center text-center border border-slate-200`}>
+                            <c.icon size={16} className={`mb-1 ${c.color} opacity-80`} />
+                            <span className="text-slate-500 text-[10px] uppercase font-bold">{c.label}</span>
+                            <span className={`text-lg font-bold ${c.color}`}>{c.val}</span>
+                        </div>
+                    ))}
+                </div>
 
-            {/* Charts Grid */}
-            <div className="grid grid-cols-2 gap-6 h-full pb-8">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h3 className="text-slate-700 font-semibold mb-4">Projetos por Status</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer>
-                            <BarChart data={portfolioStats.statusChart}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
-                                <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 10}} />
-                                <YAxis tick={{fill: '#64748b'}} />
-                                <Bar dataKey="value">
-                                    {portfolioStats.statusChart.map((e, i) => <Cell key={i} fill={e.color} />)}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                {/* Charts Grid - Reduced height to fit table */}
+                <div className="grid grid-cols-2 gap-4 h-48 shrink-0 mb-4">
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <h3 className="text-slate-700 font-semibold mb-2 text-sm">Projetos por Status</h3>
+                        <div className="h-[calc(100%-2rem)]">
+                            <ResponsiveContainer>
+                                <BarChart data={portfolioStats.statusChart}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                                    <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 10}} />
+                                    <YAxis tick={{fill: '#64748b'}} />
+                                    <Bar dataKey="value">
+                                        {portfolioStats.statusChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <h3 className="text-slate-700 font-semibold mb-2 text-sm">Por Unidade de Negócio</h3>
+                        <div className="h-[calc(100%-2rem)]">
+                            <ResponsiveContainer>
+                                <BarChart data={portfolioStats.buChart}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                                    <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 10}} />
+                                    <YAxis tick={{fill: '#64748b'}} />
+                                    <Bar dataKey="value">
+                                        {portfolioStats.buChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
                 </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h3 className="text-slate-700 font-semibold mb-4">Por Unidade de Negócio</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer>
-                            <BarChart data={portfolioStats.buChart}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
-                                <XAxis dataKey="name" tick={{fill: '#64748b', fontSize: 10}} />
-                                <YAxis tick={{fill: '#64748b'}} />
-                                <Bar dataKey="value">
-                                    {portfolioStats.buChart.map((e, i) => <Cell key={i} fill={e.color} />)}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+
+                {/* Future Deliveries Table - Highlighted */}
+                <div className="flex-1 bg-slate-900 rounded-xl border-2 border-blue-500/50 overflow-hidden flex flex-col shadow-lg">
+                    <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
+                        <h3 className="text-white font-bold flex items-center gap-2 uppercase tracking-wider text-sm">
+                            <Radar size={16} className="text-blue-400 animate-pulse"/> 
+                            No Radar: Entregas Futuras
+                        </h3>
+                        <span className="text-xs text-slate-400">{futureDeliveries.length} Projetos Mapeados</span>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                        {futureDeliveries.length > 0 ? (
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-900 text-slate-400 uppercase font-semibold sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-2">Data Entrega</th>
+                                        <th className="px-4 py-2">Projeto</th>
+                                        <th className="px-4 py-2">Cliente</th>
+                                        <th className="px-4 py-2">Fase Atual</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800 text-slate-300">
+                                    {futureDeliveries
+                                        .sort((a,b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'))
+                                        .map((d, i) => (
+                                        <tr key={i} className="hover:bg-slate-800/50 transition-colors">
+                                            <td className="px-4 py-2 font-mono text-blue-300">
+                                                {d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString() : <span className="text-slate-600 italic">A Definir</span>}
+                                            </td>
+                                            <td className="px-4 py-2 font-medium text-white truncate max-w-[200px]" title={d.title}>{d.title}</td>
+                                            <td className="px-4 py-2 truncate max-w-[150px]" title={d.client}>{d.client}</td>
+                                            <td className="px-4 py-2">
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold border ${d.phase.includes('ESTOQUE') ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-slate-700 border-slate-600 text-slate-400'}`}>
+                                                    {d.phase}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-slate-500 italic">
+                                Nenhuma entrega futura mapeada.
+                            </div>
+                        )}
                     </div>
                 </div>
-            </div>
+             </div>
         </Slide>,
         // Slide 4: SLA Overview (New)
         <Slide key="sla-phases">
@@ -1069,7 +1166,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                  )) : <p className="text-gray-400 italic">Nenhum próximo passo registrado.</p>}
              </div>
         </Slide>
-    ], [portfolioStats, keyFacts, detailedProjects, nextSteps, phaseStats]);
+    ], [portfolioStats, keyFacts, detailedProjects, nextSteps, phaseStats, futureDeliveries]);
 
     const generatePdf = () => {
         const element = document.getElementById('presentation-content');
@@ -1132,7 +1229,13 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                 </div>
 
                 <div className="bg-nexus-800 p-6 rounded-xl border border-nexus-700 space-y-4">
-                    <h3 className="text-white font-semibold">Próximos Passos</h3>
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-white font-semibold">Próximos Passos & Entregas Futuras</h3>
+                         <label className="flex items-center gap-2 bg-nexus-700 hover:bg-nexus-600 text-white px-2 py-1 rounded cursor-pointer text-xs">
+                             <UploadCloud size={14} /> Importar CSV Entregas
+                             <input type="file" accept=".csv" onChange={handleFutureDeliveriesCsv} className="hidden" />
+                         </label>
+                    </div>
                     <div className="space-y-2">
                         <input type="text" value={stepProj} onChange={e => setStepProj(e.target.value)} className="w-full bg-nexus-900 border border-nexus-600 rounded p-2 text-white" placeholder="Projeto..." />
                         <div className="flex gap-2">

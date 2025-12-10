@@ -93,6 +93,15 @@ export interface NextStep {
     description: string;
 }
 
+export interface FutureDelivery {
+    id: string;
+    title: string;
+    phase: string;
+    client: string;
+    projectNumber: string;
+    deliveryDate: string; // ISO string or original string
+}
+
 // --- Stock & SLA Module Types ---
 
 export enum SLAStatus {
