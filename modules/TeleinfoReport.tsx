@@ -1,14 +1,14 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ComposedChart, Line, Area
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
-  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers
+  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers, Activity
 } from 'lucide-react';
 import { generateProjectRiskAnalysis, generateDetailedProjectRiskAnalysis } from '../services/geminiService';
-import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject } from '../types';
+import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject, ProductionData } from '../types';
 
 // Declare html2pdf for TypeScript since it is loaded via CDN
 declare const html2pdf: any;
@@ -84,6 +84,35 @@ const parseTeleinfoCsv = (text: string): Project[] => {
         });
     }
     return rows;
+};
+
+const parseProductionCsv = (text: string): ProductionData[] => {
+    // Format: Dia;Meta;Realizado
+    // Example: 25/11/2025;40;12
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const result: ProductionData[] = [];
+    
+    // Skip header (Assuming first row is header)
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(';');
+        if (cols.length < 2) continue;
+
+        const dateStr = cols[0].trim();
+        const metaStr = cols[1].trim();
+        const realizedStr = cols[2]?.trim();
+
+        // Parse Date dd/mm/yyyy to YYYY-MM-DD
+        const dateParts = dateStr.split('/');
+        if (dateParts.length !== 3) continue;
+        const isoDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+
+        result.push({
+            date: isoDate,
+            meta: parseFloat(metaStr.replace(',', '.') || '0'),
+            realized: parseFloat(realizedStr?.replace(',', '.') || '0')
+        });
+    }
+    return result;
 };
 
 const statusColors: { [key: string]: { pill: string; chart: string } } = {
@@ -169,6 +198,83 @@ const RiskAnalysisModal: React.FC<{ content: string; isLoading: boolean; title: 
         </div>
     </div>
 );
+
+// Helper Component for Production Chart with Toggle
+const ProjectProductionChart: React.FC<{ data: ProductionData[] }> = ({ data }) => {
+    const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
+
+    const chartData = useMemo(() => {
+        if (viewMode === 'daily') {
+            return data.map(d => ({
+                name: new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+                meta: d.meta,
+                realized: d.realized
+            }));
+        } else {
+            // Group by Week
+            const weeklyMap: Record<string, { meta: number, realized: number, count: number, startDate: string }> = {};
+            
+            data.forEach(d => {
+                const date = new Date(d.date);
+                // Get start of week (Sunday)
+                const startOfWeek = new Date(date);
+                startOfWeek.setDate(date.getDate() - date.getDay());
+                const key = startOfWeek.toISOString().split('T')[0];
+
+                if (!weeklyMap[key]) weeklyMap[key] = { meta: 0, realized: 0, count: 0, startDate: key };
+                weeklyMap[key].meta += d.meta;
+                weeklyMap[key].realized += d.realized;
+                weeklyMap[key].count++;
+            });
+
+            return Object.values(weeklyMap)
+                .sort((a,b) => a.startDate.localeCompare(b.startDate))
+                .map(w => ({
+                    name: `Sem ${new Date(w.startDate).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}`,
+                    meta: w.meta,
+                    realized: w.realized
+                }));
+        }
+    }, [data, viewMode]);
+
+    return (
+        <div className="h-full flex flex-col">
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-slate-600">Produção (Meta vs Realizado)</h3>
+                <div className="flex bg-gray-200 rounded p-0.5">
+                    <button 
+                        onClick={() => setViewMode('daily')}
+                        className={`px-2 py-0.5 text-[10px] rounded transition-colors ${viewMode === 'daily' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Diária
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('weekly')}
+                        className={`px-2 py-0.5 text-[10px] rounded transition-colors ${viewMode === 'weekly' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Semanal
+                    </button>
+                </div>
+            </div>
+            <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={chartData} margin={{top: 5, right: 5, bottom: 0, left: 0}}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" fontSize={10} tick={{fill: '#64748b'}} interval="preserveStartEnd" />
+                        <YAxis fontSize={10} tick={{fill: '#64748b'}} />
+                        <Tooltip 
+                            contentStyle={{backgroundColor: '#fff', borderColor: '#e2e8f0', color: '#1e293b', fontSize: '12px'}}
+                            itemStyle={{padding: 0}}
+                        />
+                        <Legend iconSize={8} wrapperStyle={{fontSize: '10px'}} />
+                        <Area type="monotone" dataKey="realized" name="Realizado" fill="#22c55e" stroke="#16a34a" fillOpacity={0.3} />
+                        <Line type="monotone" dataKey="meta" name="Meta" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+};
 
 // --- VIEW: DASHBOARD ---
 
@@ -366,7 +472,8 @@ const MonitoringView: React.FC = () => {
         id: '', name: '', start: '', end: '', costCenter: '',
         steps: [], 
         soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 }, 
-        usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
+        usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 },
+        productionData: []
     });
 
     const handleNewProject = () => {
@@ -378,7 +485,8 @@ const MonitoringView: React.FC = () => {
             costCenter: '',
             steps: [{ name: 'Planejamento', perc: 0 }, { name: 'Execução', perc: 0 }, { name: 'Entrega', perc: 0 }],
             soldHours: { infra: 0, sse: 0, ti: 0, aut: 0 },
-            usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 }
+            usedHours: { infra: 0, sse: 0, ti: 0, aut: 0 },
+            productionData: []
         });
         setViewMode('form');
     };
@@ -417,6 +525,19 @@ const MonitoringView: React.FC = () => {
         setRiskModal({ isOpen: true, content: '', isLoading: true });
         const result = await generateDetailedProjectRiskAnalysis(project);
         setRiskModal({ isOpen: true, content: result, isLoading: false });
+    };
+
+    // CSV Production Import Handler
+    const handleProductionCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const parsed = parseProductionCsv(evt.target?.result as string);
+            setEditingProject(prev => ({ ...prev, productionData: parsed }));
+            alert(`${parsed.length} registros de produção carregados.`);
+        };
+        reader.readAsText(file);
     };
 
     // Render List View
@@ -572,7 +693,7 @@ const MonitoringView: React.FC = () => {
                 </div>
 
                 <div className="bg-nexus-800 border border-nexus-700 rounded-xl p-6">
-                    <h3 className="text-white font-semibold mb-4">Controle de Horas (Orçado vs Realizado)</h3>
+                    <h3 className="text-white font-semibold mb-4">Controle de Horas & Produção</h3>
                     <div className="grid grid-cols-2 gap-4 mb-6">
                         {(Object.keys(editingProject.soldHours) as Array<keyof BuHours>).map(bu => (
                             <div key={bu} className="bg-nexus-900/50 p-3 rounded-lg border border-nexus-700">
@@ -590,7 +711,7 @@ const MonitoringView: React.FC = () => {
                             </div>
                         ))}
                     </div>
-                    <div className="h-40">
+                    <div className="h-40 mb-6">
                          <ResponsiveContainer>
                             <BarChart data={hoursData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -600,6 +721,20 @@ const MonitoringView: React.FC = () => {
                                 <Bar dataKey="Used" fill="#f97316" />
                             </BarChart>
                         </ResponsiveContainer>
+                    </div>
+                    
+                    {/* CSV Upload for Production Data */}
+                    <div className="pt-6 border-t border-nexus-700">
+                        <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2"><Activity size={16} className="text-yellow-500"/> Gráfico Opcional: Produção</h4>
+                        <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 bg-nexus-900 border border-nexus-600 hover:border-yellow-500 text-nexus-300 px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors">
+                                <UploadCloud size={14} /> Importar CSV (Dia;Meta;Realizado)
+                                <input type="file" accept=".csv" onChange={handleProductionCsv} className="hidden" />
+                            </label>
+                            {editingProject.productionData && editingProject.productionData.length > 0 && (
+                                <span className="text-xs text-green-400 flex items-center gap-1"><BrainCircuit size={12}/> {editingProject.productionData.length} dias carregados</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -851,6 +986,8 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                 ? Math.round(p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length)
                 : 0;
 
+            const hasProductionData = p.productionData && p.productionData.length > 0;
+
             return (
                 <Slide key={p.id}>
                     <div className="flex justify-between items-start border-b pb-4 mb-4">
@@ -880,19 +1017,26 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                                 ))}
                             </div>
                         </div>
-                        <div>
-                            <h3 className="font-semibold mb-4 text-slate-600">Performance de Horas</h3>
-                            <div className="h-48">
+                        <div className="flex flex-col gap-4 h-full">
+                            <div className={`${hasProductionData ? 'h-40' : 'h-64'}`}>
+                                <h3 className="font-semibold mb-4 text-slate-600">Performance de Horas</h3>
                                 <ResponsiveContainer>
                                     <BarChart data={Object.keys(p.soldHours).map(k => ({name: k.toUpperCase(), Sold: p.soldHours[k as keyof BuHours], Used: p.usedHours[k as keyof BuHours]}))}>
                                         <CartesianGrid strokeDasharray="3 3" />
                                         <XAxis dataKey="name" fontSize={10} />
-                                        <Legend />
+                                        <Legend wrapperStyle={{fontSize: '10px'}}/>
                                         <Bar dataKey="Sold" fill="#10b981" />
                                         <Bar dataKey="Used" fill="#f97316" />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
+                            
+                            {/* Optional Production Chart */}
+                            {hasProductionData && (
+                                <div className="flex-1 min-h-0 border-t pt-2">
+                                    <ProjectProductionChart data={p.productionData!} />
+                                </div>
+                            )}
                         </div>
                     </div>
 

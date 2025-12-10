@@ -63,15 +63,22 @@ export interface BuHours {
     aut: number;
 }
 
+export interface ProductionData {
+    date: string; // ISO YYYY-MM-DD
+    meta: number;
+    realized: number;
+}
+
 export interface DetailedProject {
     id: string;
     name: string;
     start: string;
     end: string;
-    costCenter?: string; // Campo Adicionado
+    costCenter?: string;
     steps: DetailedProjectStep[];
     soldHours: BuHours;
     usedHours: BuHours;
+    productionData?: ProductionData[]; // New Field
 }
 
 export interface KeyFact {
