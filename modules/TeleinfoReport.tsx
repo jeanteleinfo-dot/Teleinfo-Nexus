@@ -628,13 +628,24 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     const [isSlideMode, setIsSlideMode] = useState(false);
     const [slideIndex, setSlideIndex] = useState(0);
 
+    // Fullscreen Helper
+    const toggleFullscreen = (enter: boolean) => {
+        if (enter) {
+            setIsSlideMode(true);
+            document.documentElement.requestFullscreen().catch(e => console.error(e));
+        } else {
+            setIsSlideMode(false);
+            if (document.fullscreenElement) document.exitFullscreen().catch(e => console.error(e));
+        }
+    };
+
     // Keyboard Navigation for Fullscreen
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (!isSlideMode) return;
             if (e.key === 'ArrowRight') setSlideIndex(prev => Math.min(slides.length - 1, prev + 1));
             if (e.key === 'ArrowLeft') setSlideIndex(prev => Math.max(0, prev - 1));
-            if (e.key === 'Escape') setIsSlideMode(false);
+            if (e.key === 'Escape') toggleFullscreen(false);
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
@@ -886,8 +897,8 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                     </div>
 
                     {/* Time Progress Bar Footer */}
-                    <div className="absolute bottom-0 left-0 w-full bg-gray-50 border-t border-gray-100">
-                         <div className="flex justify-between px-8 py-1 text-[10px] text-gray-500 uppercase font-bold tracking-wider">
+                    <div className="absolute bottom-0 left-0 w-full bg-gray-50 border-t border-gray-100 z-10 rounded-b-lg overflow-hidden">
+                         <div className="flex justify-between px-8 py-1 text-[10px] text-gray-500 uppercase font-bold tracking-wider bg-white">
                              <span>Início: {p.start}</span>
                              <span>Cronograma Decorrido: {timeProgress.toFixed(1)}%</span>
                              <span>Término: {p.end}</span>
@@ -932,9 +943,9 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     return (
         <div className="space-y-6 animate-fadeIn">
             {isSlideMode && (
-                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-0">
+                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-0 w-screen h-screen">
                     <div className="w-full h-full flex items-center justify-center">
-                        <div className="aspect-video w-full max-h-full max-w-full bg-white shadow-2xl overflow-hidden">
+                        <div className="aspect-video w-full max-h-full max-w-full bg-white shadow-2xl overflow-hidden flex items-center justify-center">
                             {slides[slideIndex]}
                         </div>
                     </div>
@@ -943,7 +954,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                         <button onClick={() => setSlideIndex(Math.max(0, slideIndex - 1))} className="hover:text-blue-400 transition-colors"><ArrowLeft size={32}/></button>
                         <span className="flex items-center text-lg font-mono">{slideIndex + 1} / {slides.length}</span>
                         <button onClick={() => setSlideIndex(Math.min(slides.length - 1, slideIndex + 1))} className="hover:text-blue-400 transition-colors"><ArrowRight size={32}/></button>
-                        <button onClick={() => setIsSlideMode(false)} className="hover:text-red-400 ml-4 transition-colors"><X size={32}/></button>
+                        <button onClick={() => toggleFullscreen(false)} className="hover:text-red-400 ml-4 transition-colors"><X size={32}/></button>
                     </div>
                 </div>
             )}
@@ -951,7 +962,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
             <div className="flex justify-between items-center bg-nexus-800 p-4 rounded-xl border border-nexus-700">
                 <h2 className="text-xl font-bold text-white">Gerador de Apresentação</h2>
                 <div className="flex gap-2">
-                    <button onClick={() => setIsSlideMode(true)} className="bg-nexus-700 hover:bg-nexus-600 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                    <button onClick={() => toggleFullscreen(true)} className="bg-nexus-700 hover:bg-nexus-600 text-white px-4 py-2 rounded-lg flex items-center gap-2">
                         <Tv size={18} /> Apresentar
                     </button>
                     <button onClick={generatePdf} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2">
