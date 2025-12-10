@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
-  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers, Activity, Radar
+  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers, Activity, Radar, LayoutDashboard
 } from 'lucide-react';
 import { generateProjectRiskAnalysis, generateDetailedProjectRiskAnalysis } from '../services/geminiService';
 import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject, ProductionData, FutureDelivery } from '../types';
@@ -932,10 +932,10 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                 </div>
 
                 {/* Charts Grid - Reduced height to fit table */}
-                <div className="grid grid-cols-2 gap-4 h-48 shrink-0 mb-4">
+                <div className="grid grid-cols-2 gap-4 h-40 shrink-0 mb-4">
                     <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
                         <h3 className="text-slate-700 font-semibold mb-2 text-sm">Projetos por Status</h3>
-                        <div className="h-[calc(100%-2rem)]">
+                        <div className="h-[calc(100%-1.5rem)]">
                             <ResponsiveContainer>
                                 <BarChart data={portfolioStats.statusChart}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
@@ -950,7 +950,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                     </div>
                     <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
                         <h3 className="text-slate-700 font-semibold mb-2 text-sm">Por Unidade de Negócio</h3>
-                        <div className="h-[calc(100%-2rem)]">
+                        <div className="h-[calc(100%-1.5rem)]">
                             <ResponsiveContainer>
                                 <BarChart data={portfolioStats.buChart}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
@@ -965,38 +965,40 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                     </div>
                 </div>
 
-                {/* Future Deliveries Table - Highlighted */}
-                <div className="flex-1 bg-slate-900 rounded-xl border-2 border-blue-500/50 overflow-hidden flex flex-col shadow-lg">
-                    <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
-                        <h3 className="text-white font-bold flex items-center gap-2 uppercase tracking-wider text-sm">
-                            <Radar size={16} className="text-blue-400 animate-pulse"/> 
-                            No Radar: Entregas Futuras
+                {/* Future Deliveries Table - Highlighted & Styled */}
+                <div className="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col shadow-sm">
+                    <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                        <h3 className="text-slate-800 font-bold flex items-center gap-2 uppercase tracking-wider text-sm">
+                            <Radar size={20} className="text-red-600 animate-pulse drop-shadow-md"/> 
+                            NO RADAR
                         </h3>
-                        <span className="text-xs text-slate-400">{futureDeliveries.length} Projetos Mapeados</span>
+                        <span className="text-xs text-slate-500">{futureDeliveries.length} Projetos Mapeados</span>
                     </div>
                     <div className="flex-1 overflow-auto">
                         {futureDeliveries.length > 0 ? (
                             <table className="w-full text-left text-xs">
-                                <thead className="bg-slate-900 text-slate-400 uppercase font-semibold sticky top-0">
+                                <thead className="bg-slate-50 text-slate-500 uppercase font-semibold sticky top-0 border-b border-slate-100">
                                     <tr>
-                                        <th className="px-4 py-2">Data Entrega</th>
+                                        <th className="px-4 py-2 w-24">Data Entrega</th>
                                         <th className="px-4 py-2">Projeto</th>
-                                        <th className="px-4 py-2">Cliente</th>
-                                        <th className="px-4 py-2">Fase Atual</th>
+                                        <th className="px-4 py-2 w-32">C.Custo</th>
+                                        <th className="px-4 py-2 w-40">Cliente</th>
+                                        <th className="px-4 py-2 w-28">Fase Atual</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-800 text-slate-300">
+                                <tbody className="divide-y divide-slate-100 text-slate-700">
                                     {futureDeliveries
                                         .sort((a,b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'))
                                         .map((d, i) => (
-                                        <tr key={i} className="hover:bg-slate-800/50 transition-colors">
-                                            <td className="px-4 py-2 font-mono text-blue-300">
-                                                {d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString() : <span className="text-slate-600 italic">A Definir</span>}
+                                        <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-4 py-2 font-mono text-blue-600 font-bold">
+                                                {d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString() : <span className="text-slate-400 italic">A Definir</span>}
                                             </td>
-                                            <td className="px-4 py-2 font-medium text-white truncate max-w-[200px]" title={d.title}>{d.title}</td>
+                                            <td className="px-4 py-2 font-medium truncate max-w-[200px]" title={d.title}>{d.title}</td>
+                                            <td className="px-4 py-2 font-mono text-slate-500">{d.projectNumber}</td>
                                             <td className="px-4 py-2 truncate max-w-[150px]" title={d.client}>{d.client}</td>
                                             <td className="px-4 py-2">
-                                                <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold border ${d.phase.includes('ESTOQUE') ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-slate-700 border-slate-600 text-slate-400'}`}>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${d.phase.includes('ESTOQUE') ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                                                     {d.phase}
                                                 </span>
                                             </td>
@@ -1005,8 +1007,8 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                                 </tbody>
                             </table>
                         ) : (
-                            <div className="flex items-center justify-center h-full text-slate-500 italic">
-                                Nenhuma entrega futura mapeada.
+                            <div className="flex items-center justify-center h-full text-slate-400 italic bg-slate-50/50">
+                                Nenhuma entrega futura mapeada. Importe o CSV na aba "Apresentação".
                             </div>
                         )}
                     </div>
@@ -1272,9 +1274,9 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
 };
 
 export const TeleinfoReport: React.FC = () => {
+    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects', []);
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
-    const [projects, setProjects] = useLocalStorage<Project[]>('nexus_teleinfo_projects_cache', []);
-    const [fileName, setFileName] = useLocalStorage<string>('nexus_teleinfo_filename', 'Nenhum arquivo carregado');
+    const [fileName, setFileName] = useState<string>('Dados Armazenados');
 
     const handleDataLoaded = (data: Project[], name: string) => {
         setProjects(data);
@@ -1285,34 +1287,28 @@ export const TeleinfoReport: React.FC = () => {
         <div className="flex flex-col h-full space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-white">Relatórios IA</h2>
-                    <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Apresentações</p>
+                    <h2 className="text-2xl font-bold text-white">Relatórios IA & Dashboard</h2>
+                    <p className="text-nexus-400">Análise Inteligente de Projetos e Riscos</p>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                        Online
-                    </span>
-                    <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700 overflow-x-auto">
-                        {[
-                            { id: 'dashboard', label: 'Visão Geral', icon: FileText },
-                            { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
-                            { id: 'presentation', label: 'Apresentação', icon: Tv },
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
-                                    activeTab === tab.id 
-                                    ? 'bg-blue-600 text-white shadow-lg' 
-                                    : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
-                                }`}
-                            >
-                                <tab.icon size={16} />
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
+                <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
+                    {[
+                        { id: 'dashboard', label: 'Dashboard Geral', icon: LayoutDashboard },
+                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
+                        { id: 'presentation', label: 'Apresentação', icon: Tv },
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                                activeTab === tab.id 
+                                ? 'bg-blue-600 text-white shadow-lg' 
+                                : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
+                            }`}
+                        >
+                            <tab.icon size={16} />
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
