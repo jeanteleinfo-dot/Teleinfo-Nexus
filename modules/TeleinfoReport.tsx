@@ -1041,25 +1041,31 @@ export const TeleinfoReport: React.FC = () => {
                     <h2 className="text-2xl font-bold text-white">Relatórios IA</h2>
                     <p className="text-nexus-400">Análise de Projetos, Riscos e Geração de Apresentações</p>
                 </div>
-                <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700 overflow-x-auto">
-                    {[
-                        { id: 'dashboard', label: 'Visão Geral', icon: FileText },
-                        { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
-                        { id: 'presentation', label: 'Apresentação', icon: Tv },
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
-                                activeTab === tab.id 
-                                ? 'bg-blue-600 text-white shadow-lg' 
-                                : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
-                            }`}
-                        >
-                            <tab.icon size={16} />
-                            {tab.label}
-                        </button>
-                    ))}
+                <div className="flex flex-col items-end gap-2">
+                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        Online
+                    </span>
+                    <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700 overflow-x-auto">
+                        {[
+                            { id: 'dashboard', label: 'Visão Geral', icon: FileText },
+                            { id: 'monitoring', label: 'Auditoria Detalhada', icon: BrainCircuit },
+                            { id: 'presentation', label: 'Apresentação', icon: Tv },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
+                                    activeTab === tab.id 
+                                    ? 'bg-blue-600 text-white shadow-lg' 
+                                    : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
+                                }`}
+                            >
+                                <tab.icon size={16} />
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 

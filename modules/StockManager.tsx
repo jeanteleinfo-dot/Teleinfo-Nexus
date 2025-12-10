@@ -537,25 +537,31 @@ export const StockManager: React.FC = () => {
           <h2 className="text-2xl font-bold text-white">Monitoramento Estoque e Compras</h2>
           <p className="text-nexus-400">Gestão de SLA de Projetos e Inventário Físico</p>
         </div>
-        <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
-            {[
-                { id: 'monitor', label: 'Monitoramento SLA', icon: BarChart2 },
-                { id: 'control', label: 'Controle Fases', icon: Layers },
-                { id: 'physical', label: 'Almoxarifado', icon: Package },
-            ].map(tab => (
-                <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                        activeTab === tab.id 
-                        ? 'bg-blue-600 text-white shadow-lg' 
-                        : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
-                    }`}
-                >
-                    <tab.icon size={16} />
-                    {tab.label}
-                </button>
-            ))}
+        <div className="flex flex-col items-end gap-2">
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                Online
+            </span>
+            <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
+                {[
+                    { id: 'monitor', label: 'Monitoramento SLA', icon: BarChart2 },
+                    { id: 'control', label: 'Controle Fases', icon: Layers },
+                    { id: 'physical', label: 'Almoxarifado', icon: Package },
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            activeTab === tab.id 
+                            ? 'bg-blue-600 text-white shadow-lg' 
+                            : 'text-nexus-400 hover:text-white hover:bg-nexus-700'
+                        }`}
+                    >
+                        <tab.icon size={16} />
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
         </div>
       </div>
 
