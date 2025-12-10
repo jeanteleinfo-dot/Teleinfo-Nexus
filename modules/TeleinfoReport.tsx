@@ -628,6 +628,18 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
     const [isSlideMode, setIsSlideMode] = useState(false);
     const [slideIndex, setSlideIndex] = useState(0);
 
+    // Keyboard Navigation for Fullscreen
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isSlideMode) return;
+            if (e.key === 'ArrowRight') setSlideIndex(prev => Math.min(slides.length - 1, prev + 1));
+            if (e.key === 'ArrowLeft') setSlideIndex(prev => Math.max(0, prev - 1));
+            if (e.key === 'Escape') setIsSlideMode(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isSlideMode]); // slides is memoized, but slideIndex handled by state setter fn
+
     const portfolioStats = useMemo(() => {
         const counts = { finished: 0, inProgress: 0, paralyzed: 0, notStarted: 0 };
         const statusChart: Record<string, number> = {};
@@ -672,6 +684,7 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
         };
     }, [multiPhaseProjects]);
 
+    // slides array dependency must include 'slides.length' logic which comes from data
     const slides = useMemo(() => [
         // Slide 1: Cover
         <Slide key="cover" className="!p-0 bg-gradient-to-br from-slate-900 to-slate-800 text-white">
@@ -925,11 +938,12 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
                             {slides[slideIndex]}
                         </div>
                     </div>
-                    <div className="absolute bottom-4 flex gap-4 text-white bg-black/50 p-2 rounded-full backdrop-blur-sm">
-                        <button onClick={() => setSlideIndex(Math.max(0, slideIndex - 1))} className="hover:text-blue-400"><ArrowLeft size={32}/></button>
+                    {/* Increased z-index to ensure visibility and interaction over potential slide content overlays */}
+                    <div className="absolute bottom-4 z-[60] flex gap-4 text-white bg-black/50 p-2 rounded-full backdrop-blur-sm">
+                        <button onClick={() => setSlideIndex(Math.max(0, slideIndex - 1))} className="hover:text-blue-400 transition-colors"><ArrowLeft size={32}/></button>
                         <span className="flex items-center text-lg font-mono">{slideIndex + 1} / {slides.length}</span>
-                        <button onClick={() => setSlideIndex(Math.min(slides.length - 1, slideIndex + 1))} className="hover:text-blue-400"><ArrowRight size={32}/></button>
-                        <button onClick={() => setIsSlideMode(false)} className="hover:text-red-400 ml-4"><X size={32}/></button>
+                        <button onClick={() => setSlideIndex(Math.min(slides.length - 1, slideIndex + 1))} className="hover:text-blue-400 transition-colors"><ArrowRight size={32}/></button>
+                        <button onClick={() => setIsSlideMode(false)} className="hover:text-red-400 ml-4 transition-colors"><X size={32}/></button>
                     </div>
                 </div>
             )}
@@ -985,7 +999,13 @@ const PresentationView: React.FC<{ allProjects: Project[] }> = ({ allProjects })
             <div id="presentation-content" className="bg-gray-800 p-0 rounded-none overflow-hidden">
                 {slides.map((slide, i) => (
                     <div key={i} className="w-full page-break-after-always">
-                        {React.cloneElement(slide as React.ReactElement, { className: 'w-full shadow-none rounded-none m-0 border-none' })}
+                        {/* 
+                            CRITICAL FIX: Merge existing className props with the PDF/Preview overrides.
+                            This preserves custom styling like the cover page gradients while ensuring full width for print.
+                        */}
+                        {React.cloneElement(slide as React.ReactElement<any>, { 
+                            className: `${(slide as React.ReactElement<any>).props.className || ''} w-full shadow-none rounded-none m-0 border-none` 
+                        })}
                     </div>
                 ))}
             </div>
