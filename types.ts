@@ -10,7 +10,7 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
-  password?: string; // Added for local auth simulation
+  password?: string;
   email?: string;
 }
 
@@ -34,6 +34,7 @@ export interface StockItem {
 export interface ProjectBuyingStatus {
   id: string;
   projeto: string;
+  numeroProjeto: string;
   status: 'Padrão' | 'Intermediário' | 'Crítico';
   aComprar: string;
   comprados: string;
@@ -74,7 +75,7 @@ export interface BuHours {
 }
 
 export interface ProductionData {
-    date: string; // ISO YYYY-MM-DD
+    date: string;
     meta: number;
     realized: number;
 }
@@ -88,7 +89,7 @@ export interface DetailedProject {
     steps: DetailedProjectStep[];
     soldHours: BuHours;
     usedHours: BuHours;
-    productionData?: ProductionData[]; // New Field
+    productionData?: ProductionData[];
 }
 
 export interface KeyFact {
@@ -109,7 +110,7 @@ export interface FutureDelivery {
     phase: string;
     client: string;
     projectNumber: string;
-    deliveryDate: string; // ISO string or original string
+    deliveryDate: string;
 }
 
 // --- Stock & SLA Module Types ---
@@ -148,10 +149,10 @@ export enum BU {
 }
 
 export const BUColorsHex: Record<string, string> = {
-  [BU.BUINFRA]: '#f97316', // Orange
-  [BU.BUSSE]: '#22c55e',   // Green
-  [BU.BUTI]: '#3b82f6',    // Blue
-  [BU.BUAUT]: '#a855f7',   // Purple
+  [BU.BUINFRA]: '#f97316',
+  [BU.BUSSE]: '#22c55e',
+  [BU.BUTI]: '#3b82f6',
+  [BU.BUAUT]: '#a855f7',
 };
 
 export const BUColorsClass: Record<string, string> = {
@@ -172,7 +173,7 @@ export interface ManagerProject {
   hoursSold: number;
   employeesSold: number;
   address: string;
-  color: string; // Tailwind class
+  color: string;
 }
 
 export interface Employee {
@@ -183,7 +184,7 @@ export interface Employee {
 
 export interface Schedule {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   projectId: string;
   employeeId: string;
   vehicle: string;

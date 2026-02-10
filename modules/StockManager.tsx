@@ -7,7 +7,7 @@ import {
 import { StockItem, SLAProject, MultiPhaseProject, SLAStatus, ProjectBuyingStatus } from '../types';
 import { 
   ArrowUpRight, ArrowDownRight, Package, DollarSign, UploadCloud, 
-  AlertTriangle, CheckCircle, Clock, X, Mail, BarChart2, Layers, ShoppingCart, Calendar, Info
+  AlertTriangle, CheckCircle, Clock, X, Mail, BarChart2, Layers, ShoppingCart, Calendar, Info, Trash2
 } from 'lucide-react';
 
 // --- CONSTANTS & UTILS ---
@@ -16,9 +16,9 @@ const SLA_DAYS_WARNING = 5;
 const SLA_DAYS_CRITICAL = 7;
 
 const COLORS = {
-  OK: '#22c55e',      // green-500
-  WARNING: '#eab308', // yellow-500
-  CRITICAL: '#ef4444' // red-500
+  OK: '#22c55e',
+  WARNING: '#eab308',
+  CRITICAL: '#ef4444'
 };
 
 // LocalStorage Hook
@@ -84,40 +84,34 @@ const parseMultiPhaseCSV = (text: string): MultiPhaseProject[] => {
 };
 
 const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
-    // Handle BOM
     if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
-    
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     const result: ProjectBuyingStatus[] = [];
     
-    // The user's CSV format: 
-    // Título;Criticidade ;A Comprar;Comprado;Entregue;Data disponivel para o cliente
-    
+    // Header esperado: Título;Nº Projeto (Centro de controle);Criticidade ;A Comprar;Comprado;Entregue;Data disponivel para o cliente
     for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(';');
-        if (cols.length < 2) continue;
+        if (cols.length < 3) continue;
 
-        const rawStatus = cols[1]?.trim() || 'Padrão';
+        const rawStatus = cols[2]?.trim() || 'Padrão';
         let status: 'Padrão' | 'Intermediário' | 'Crítico' = 'Padrão';
-        
-        // Normalize status check
         const normalizedStatus = rawStatus.toLowerCase();
+        
         if (normalizedStatus.includes('critico') || normalizedStatus.includes('crítico')) {
             status = 'Crítico';
         } else if (normalizedStatus.includes('intermediario') || normalizedStatus.includes('intermediário')) {
             status = 'Intermediário';
-        } else {
-            status = 'Padrão';
         }
 
         result.push({
             id: `buy-${i}-${Date.now()}`,
             projeto: cols[0]?.trim() || 'N/A',
+            numeroProjeto: cols[1]?.trim() || 'N/A',
             status: status,
-            aComprar: cols[2]?.trim() || '-',
-            comprados: cols[3]?.trim() || '-',
-            entregue: cols[4]?.trim() || '-',
-            dataDisponivel: cols[5]?.trim() || 'A definir',
+            aComprar: cols[3]?.trim() || '-',
+            comprados: cols[4]?.trim() || '-',
+            entregue: cols[5]?.trim() || '-',
+            dataDisponivel: cols[6]?.trim() || 'A definir',
         });
     }
     return result;
@@ -153,7 +147,7 @@ const BuyingStatusModal: React.FC<{ isOpen: boolean; onClose: () => void; projec
                     <div>
                         <div className="flex items-center gap-2 mb-2">
                             <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest animate-pulse">ALERTA CRÍTICO</span>
-                            <span className="text-xs text-nexus-400 font-mono">ID: {project.id.split('-')[1]}</span>
+                            <span className="text-xs text-nexus-400 font-mono">C/C: {project.numeroProjeto}</span>
                         </div>
                         <h3 className="text-2xl font-bold text-white leading-tight">{project.projeto}</h3>
                     </div>
@@ -180,7 +174,7 @@ const BuyingStatusModal: React.FC<{ isOpen: boolean; onClose: () => void; projec
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-nexus-700 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <p className="text-xs text-nexus-500 max-w-xs italic">Este projeto requer atenção imediata do departamento de suprimentos devido ao status de criticidade.</p>
+                    <p className="text-xs text-nexus-500 max-w-xs italic">Atenção: Este projeto exige acompanhamento prioritário por estar em nível crítico de aquisição.</p>
                     <button onClick={onClose} className="w-full md:w-auto bg-red-600 hover:bg-red-500 text-white px-10 py-3 rounded-xl font-bold transition-all shadow-lg shadow-red-900/20 active:scale-95">Fechar Detalhes</button>
                 </div>
             </div>
@@ -271,6 +265,7 @@ const ProjectBuyingStatusView: React.FC = () => {
                         <thead className="bg-nexus-900/80 text-nexus-400 uppercase font-bold text-[10px] tracking-wider sticky top-0 backdrop-blur-md">
                             <tr>
                                 <th className="px-6 py-4">Projeto</th>
+                                <th className="px-6 py-4">Centro de Custo</th>
                                 <th className="px-6 py-4">Criticidade</th>
                                 <th className="px-6 py-4">A Comprar</th>
                                 <th className="px-6 py-4">Comprados</th>
@@ -293,9 +288,10 @@ const ProjectBuyingStatusView: React.FC = () => {
                                     <td className="px-6 py-4 font-bold text-slate-200">
                                         <div className="flex flex-col">
                                             {item.projeto}
-                                            {item.status === 'Crítico' && <span className="text-[9px] text-red-500/70 font-bold opacity-0 group-hover:opacity-100 transition-opacity">CLIQUE PARA DETALHES</span>}
+                                            {item.status === 'Crítico' && <span className="text-[9px] text-red-500/70 font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">Clique para ver detalhes</span>}
                                         </div>
                                     </td>
+                                    <td className="px-6 py-4 font-mono text-xs text-nexus-400">{item.numeroProjeto}</td>
                                     <td className="px-6 py-4">
                                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${getPillStyle(item.status)} shadow-sm`}>
                                             {item.status}
@@ -329,11 +325,6 @@ const ProjectBuyingStatusView: React.FC = () => {
         </div>
     );
 };
-
-// Re-defining Trash2 since it was used in cleanup logic
-const Trash2: React.FC<{ size?: number; className?: string }> = ({ size = 20, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-);
 
 const StockMonitoringView: React.FC = () => {
     const [projects, setProjects] = useLocalStorage<SLAProject[]>('nexus_stock_sla_projects', []);
@@ -572,7 +563,7 @@ export const StockManager: React.FC = () => {
         <div className="flex flex-col items-end gap-2">
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold uppercase tracking-wider">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                Dados Sincronizados
+                Sincronizado
             </span>
             <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700 overflow-x-auto max-w-full shadow-md">
                 {[
