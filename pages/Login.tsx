@@ -28,8 +28,8 @@ export const Login: React.FC = () => {
 
       <div className="w-full max-w-md bg-nexus-800/50 backdrop-blur-xl border border-nexus-700 rounded-2xl shadow-2xl p-8 z-10">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-blue-900/50">
-            <span className="text-3xl font-bold text-white">N</span>
+          <div className="w-24 h-24 rounded-2xl bg-blue-600 mx-auto flex items-center justify-center mb-6 shadow-xl shadow-blue-900/50">
+            <span className="text-6xl font-bold text-white">N</span>
           </div>
           <h1 className="text-2xl font-bold text-white">Bem-vindo ao Nexus</h1>
           <p className="text-nexus-400 mt-2">Plataforma Unificada Teleinfo</p>

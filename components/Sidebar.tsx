@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AppModule, UserRole } from '../types';
@@ -25,8 +26,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentModule, onNavigate, isO
   return (
     <div className="w-64 bg-nexus-800 border-r border-nexus-700 flex flex-col h-full fixed md:relative z-20 transition-all duration-300">
       <div className="p-6 flex items-center gap-3 border-b border-nexus-700">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold">N</span>
+        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/20 shrink-0">
+          <span className="text-xl font-bold text-white">N</span>
         </div>
         <div>
           <h1 className="text-white font-bold text-lg leading-none">Nexus</h1>

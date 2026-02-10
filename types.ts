@@ -31,6 +31,16 @@ export interface StockItem {
   price: number;
 }
 
+export interface ProjectBuyingStatus {
+  id: string;
+  projeto: string;
+  status: 'Padrão' | 'Intermediário' | 'Crítico';
+  aComprar: string;
+  comprados: string;
+  entregue: string;
+  dataDisponivel: string;
+}
+
 export interface LogEntry {
   id: string;
   timestamp: string;
