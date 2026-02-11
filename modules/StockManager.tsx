@@ -84,11 +84,13 @@ const parseMultiPhaseCSV = (text: string): MultiPhaseProject[] => {
 };
 
 const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
+    // Handle BOM
     if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
+    
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     const result: ProjectBuyingStatus[] = [];
     
-    // Header esperado: Título;Nº Projeto (Centro de controle);Criticidade ;A Comprar;Comprado;Entregue;Data disponivel para o cliente
+    // Novo Header: Título;Nº Projeto (Centro de controle);Criticidade ;A Comprar;Comprado;Entregue;Data disponivel para o cliente
     for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(';');
         if (cols.length < 3) continue;
@@ -155,27 +157,26 @@ const BuyingStatusModal: React.FC<{ isOpen: boolean; onClose: () => void; projec
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700 hover:border-red-500/30 transition-colors">
+                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700">
                         <p className="text-[10px] text-nexus-500 font-black uppercase mb-2 flex items-center gap-2 tracking-widest"><ShoppingCart size={14} className="text-red-400"/> A Comprar</p>
                         <p className="text-white text-lg font-medium">{project.aComprar || '—'}</p>
                     </div>
-                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700 hover:border-blue-500/30 transition-colors">
+                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700">
                         <p className="text-[10px] text-nexus-500 font-black uppercase mb-2 flex items-center gap-2 tracking-widest"><CheckCircle size={14} className="text-blue-400"/> Comprados</p>
                         <p className="text-white text-lg font-medium">{project.comprados || '—'}</p>
                     </div>
-                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700 hover:border-green-500/30 transition-colors">
+                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700">
                         <p className="text-[10px] text-nexus-500 font-black uppercase mb-2 flex items-center gap-2 tracking-widest"><Package size={14} className="text-green-400"/> Entregue</p>
                         <p className="text-white text-lg font-medium">{project.entregue || '—'}</p>
                     </div>
-                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700 hover:border-yellow-500/30 transition-colors">
-                        <p className="text-[10px] text-nexus-500 font-black uppercase mb-2 flex items-center gap-2 tracking-widest"><Calendar size={14} className="text-yellow-400"/> Data Disponível Cliente</p>
+                    <div className="bg-nexus-900/60 p-5 rounded-xl border border-nexus-700">
+                        <p className="text-[10px] text-nexus-500 font-black uppercase mb-2 flex items-center gap-2 tracking-widest"><Calendar size={14} className="text-yellow-400"/> Data Disponível</p>
                         <p className="text-white text-lg font-mono font-medium">{project.dataDisponivel || 'A definir'}</p>
                     </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-nexus-700 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <p className="text-xs text-nexus-500 max-w-xs italic">Atenção: Este projeto exige acompanhamento prioritário por estar em nível crítico de aquisição.</p>
-                    <button onClick={onClose} className="w-full md:w-auto bg-red-600 hover:bg-red-500 text-white px-10 py-3 rounded-xl font-bold transition-all shadow-lg shadow-red-900/20 active:scale-95">Fechar Detalhes</button>
+                <div className="mt-8 pt-6 border-t border-nexus-700 flex justify-end">
+                    <button onClick={onClose} className="bg-red-600 hover:bg-red-500 text-white px-10 py-3 rounded-xl font-bold transition-all shadow-lg shadow-red-900/20 active:scale-95">Fechar Detalhes</button>
                 </div>
             </div>
         </div>
@@ -244,7 +245,6 @@ const ProjectBuyingStatusView: React.FC = () => {
                         <button 
                             onClick={() => { if(confirm("Deseja limpar todos os dados?")) setBuyingData([]); }} 
                             className="p-2 text-nexus-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                            title="Limpar Dados"
                         >
                             <Trash2 size={20} />
                         </button>
@@ -270,7 +270,7 @@ const ProjectBuyingStatusView: React.FC = () => {
                                 <th className="px-6 py-4">A Comprar</th>
                                 <th className="px-6 py-4">Comprados</th>
                                 <th className="px-6 py-4">Entregue</th>
-                                <th className="px-6 py-4">Disponível Cliente</th>
+                                <th className="px-6 py-4">Disponível</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-nexus-700/50">
@@ -288,7 +288,7 @@ const ProjectBuyingStatusView: React.FC = () => {
                                     <td className="px-6 py-4 font-bold text-slate-200">
                                         <div className="flex flex-col">
                                             {item.projeto}
-                                            {item.status === 'Crítico' && <span className="text-[9px] text-red-500/70 font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">Clique para ver detalhes</span>}
+                                            {item.status === 'Crítico' && <span className="text-[9px] text-red-500/70 font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">Clique para detalhes</span>}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-xs text-nexus-400">{item.numeroProjeto}</td>
@@ -307,11 +307,9 @@ const ProjectBuyingStatusView: React.FC = () => {
                     </table>
                     {buyingData.length === 0 && (
                         <div className="p-20 text-center flex flex-col items-center justify-center text-nexus-500">
-                            <div className="w-20 h-20 bg-nexus-900 rounded-full flex items-center justify-center mb-6">
-                                <ShoppingCart size={40} className="opacity-20"/>
-                            </div>
+                            <ShoppingCart size={40} className="mb-4 opacity-20"/>
                             <p className="text-xl font-bold text-nexus-400">Nenhum dado importado</p>
-                            <p className="text-sm mt-1">Utilize o botão de importação para carregar o arquivo CSV de Status.</p>
+                            <p className="text-sm mt-1">Carregue o arquivo CSV de Status.</p>
                         </div>
                     )}
                 </div>
