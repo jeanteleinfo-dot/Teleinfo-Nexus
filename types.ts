@@ -86,6 +86,7 @@ export interface DetailedProject {
     start: string;
     end: string;
     costCenter?: string;
+    bu?: string;
     steps: DetailedProjectStep[];
     soldHours: BuHours;
     usedHours: BuHours;
