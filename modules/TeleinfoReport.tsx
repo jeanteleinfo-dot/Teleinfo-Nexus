@@ -1,15 +1,15 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, PieChart, Pie
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
   Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity,
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
-  History
+  History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye
 } from 'lucide-react';
-import { DetailedProject, DetailedProjectStep, BuHours } from '../types';
+import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
 import { supabase, syncToSupabase, fetchFromSupabase } from '../services/supabase';
 
 // Hook para persistência no Supabase
@@ -37,10 +37,10 @@ function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispa
 
 // --- CONSTANTES DE CORES ---
 const BU_COLORS: Record<string, string> = {
-    'INFRAESTRUTURA': '#f97316', // Laranja
-    'SEGURANÇA': '#22c55e',      // Verde
-    'TECNOLOGIA': '#3b82f6',     // Azul
-    'AUTOMAÇÃO': '#a855f7',      // Roxo
+    'INFRAESTRUTURA': '#f97316',
+    'SEGURANÇA': '#22c55e',
+    'TECNOLOGIA': '#3b82f6',
+    'AUTOMAÇÃO': '#a855f7',
     'DEFAULT': '#64748b'
 };
 
@@ -69,10 +69,8 @@ const calculateTimeProgress = (startStr: string, endStr: string) => {
     const start = new Date(startStr);
     const end = new Date(endStr);
     const today = new Date();
-    
     if (today < start) return 0;
     if (today > end) return 100;
-    
     const total = end.getTime() - start.getTime();
     const elapsed = today.getTime() - start.getTime();
     return Math.min(100, Math.round((elapsed / total) * 100));
@@ -309,7 +307,7 @@ const MonitoringView: React.FC = () => {
                     <button onClick={() => { 
                         setEditingProject({ id: '', name: '', bu: '', start: '', end: '', costCenter: '', steps: [], soldHours: {infra:0,sse:0,ti:0,aut:0}, usedHours: {infra:0,sse:0,ti:0,aut:0} }); 
                         setViewMode('form'); 
-                    }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all">
+                    }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-blue-900/40 active:scale-95 transition-all">
                         <Plus size={18} /> Novo Projeto
                     </button>
                 </div>
@@ -600,8 +598,403 @@ const MonitoringView: React.FC = () => {
     );
 };
 
+// --- NOVO COMPONENTE DE APRESENTAÇÃO ATUALIZADO ---
+
+interface PresentationProps {
+    generalProjects: any[];
+    detailedProjects: DetailedProject[];
+    buyingStatus: ProjectBuyingStatus[];
+}
+
+const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detailedProjects, buyingStatus }) => {
+    const [isFullScreen, setIsFullScreen] = useState(false);
+    const [currentSlide, setCurrentSlide] = useState(0);
+    const [selectedBuyingDetail, setSelectedBuyingDetail] = useState<ProjectBuyingStatus | null>(null);
+
+    // Slides dinâmicos: Capa(1) + Portfólio(1) + BU(1) + Compras(1) + Obras(N) + Final(1)
+    const projectSlidesCount = detailedProjects.length;
+    const slidesCount = 5 + projectSlidesCount;
+
+    const nextSlide = useCallback(() => setCurrentSlide(prev => (prev + 1) % slidesCount), [slidesCount]);
+    const prevSlide = useCallback(() => setCurrentSlide(prev => (prev - 1 + slidesCount) % slidesCount), [slidesCount]);
+    const exitPresentation = useCallback(() => { setIsFullScreen(false); setSelectedBuyingDetail(null); }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isFullScreen) return;
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+            if (e.key === 'Escape') {
+                if (selectedBuyingDetail) setSelectedBuyingDetail(null);
+                else exitPresentation();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isFullScreen, nextSlide, prevSlide, exitPresentation, selectedBuyingDetail]);
+
+    const stats = useMemo(() => {
+        const total = generalProjects.length;
+        const avg = total > 0 ? (generalProjects.reduce((acc, p) => acc + (p.perc || 0), 0) / total).toFixed(0) : 0;
+        const notStarted = generalProjects.filter(p => p.status?.toUpperCase().includes('NAO INICIADO')).length;
+        
+        const statusCounts: Record<string, number> = {};
+        generalProjects.forEach(p => { 
+            const s = p.status || 'OUTROS';
+            statusCounts[s] = (statusCounts[s] || 0) + 1;
+        });
+
+        const buCounts: Record<string, number> = {};
+        generalProjects.forEach(p => { buCounts[p.bus || 'OUTROS'] = (buCounts[p.bus || 'OUTROS'] || 0) + 1; });
+        const buData = Object.entries(buCounts).map(([name, value]) => ({ name, value }));
+
+        const criticalBuys = buyingStatus.filter(b => b.status === 'Crítico');
+
+        return { total, avg, notStarted, statusCounts, buData, criticalBuys };
+    }, [generalProjects, buyingStatus]);
+
+    const renderSlide = () => {
+        if (currentSlide === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-8 animate-fadeIn">
+                    <div className="w-24 h-24 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-900/50 transform -rotate-6">
+                        <span className="text-6xl font-black text-white italic">N</span>
+                    </div>
+                    <div>
+                        <h1 className="text-6xl font-black text-white tracking-tighter mb-4">Relatório Executivo Teleinfo</h1>
+                        <p className="text-2xl text-nexus-400 font-medium">Nexus Intelligence Platform • {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                    </div>
+                    <div className="h-1 w-32 bg-blue-500 rounded-full" />
+                </div>
+            );
+        }
+
+        if (currentSlide === 1) {
+            return (
+                <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
+                    <h2 className="text-4xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Portfólio Completo</h2>
+                    <div className="grid grid-cols-3 gap-8">
+                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700">
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Total de Projetos</p>
+                            <h3 className="text-7xl font-black text-white">{stats.total}</h3>
+                        </div>
+                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700">
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Média Conclusão</p>
+                            <h3 className="text-7xl font-black text-blue-500">{stats.avg}%</h3>
+                        </div>
+                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700">
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Não Iniciados</p>
+                            <h3 className="text-7xl font-black text-orange-500">{stats.notStarted}</h3>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-4 mt-6">
+                        {Object.entries(stats.statusCounts).slice(0, 4).map(([status, count]) => (
+                            <div key={status} className="bg-nexus-900 p-4 rounded-xl border border-nexus-800">
+                                <p className="text-[10px] font-black text-nexus-500 uppercase truncate">{status}</p>
+                                <p className="text-2xl font-black text-white">{count}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        if (currentSlide === 2) {
+            return (
+                <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
+                    <h2 className="text-4xl font-black text-white border-l-8 border-purple-600 pl-6 uppercase tracking-tight">Distribuição por BU</h2>
+                    <div className="h-[500px] w-full bg-nexus-800/30 p-8 rounded-3xl border border-nexus-700 shadow-2xl">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={stats.buData} layout="vertical" margin={{ left: 40, right: 40 }}>
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={14} fontWeight="bold" width={150} />
+                                <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={40}>
+                                    {stats.buData.map((e, i) => <Cell key={i} fill={getBuColor(e.name)} />)}
+                                    <LabelList dataKey="value" position="right" fill="#fff" fontSize={18} fontWeight="bold" />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            );
+        }
+
+        if (currentSlide === 3) {
+            return (
+                <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
+                    <div className="flex justify-between items-end">
+                        <h2 className="text-4xl font-black text-white border-l-8 border-red-600 pl-6 uppercase tracking-tight">Status de Compras Críticas</h2>
+                        <ShoppingCart className="text-red-600 mb-2" size={48} />
+                    </div>
+                    <div className="bg-nexus-800/50 rounded-3xl border border-nexus-700 overflow-hidden shadow-2xl">
+                        <table className="w-full text-left">
+                            <thead className="bg-nexus-900/80">
+                                <tr className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">
+                                    <th className="px-8 py-6">Projeto</th>
+                                    <th className="px-8 py-6">Materiais Pendentes</th>
+                                    <th className="px-8 py-6">Data Disponível</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-nexus-800">
+                                {stats.criticalBuys.length > 0 ? (
+                                    stats.criticalBuys.slice(0, 6).map((b, i) => (
+                                        <tr key={i} className="hover:bg-nexus-700/20 transition-colors cursor-pointer group" onClick={() => setSelectedBuyingDetail(b)}>
+                                            <td className="px-8 py-6 font-bold text-white text-lg">
+                                                <div className="flex items-center gap-2">
+                                                    {b.projeto} <Eye size={14} className="opacity-0 group-hover:opacity-50 text-blue-400" />
+                                                </div>
+                                                <span className="block text-xs font-mono text-nexus-500">{b.numeroProjeto}</span>
+                                            </td>
+                                            <td className="px-8 py-6 text-red-400 font-medium">{b.aComprar}</td>
+                                            <td className="px-8 py-6 font-black text-white italic">{b.dataDisponivel}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={3} className="px-8 py-20 text-center text-nexus-500 font-bold">Nenhuma compra em estado crítico identificada.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="text-xs text-nexus-500 font-bold uppercase text-center italic opacity-50">Clique em um projeto para ver o detalhamento completo de materiais</p>
+                </div>
+            );
+        }
+
+        // SLIDES DE OBRAS DETALHADAS (Slides 4 até 4 + N-1)
+        if (currentSlide >= 4 && currentSlide < 4 + projectSlidesCount) {
+            const project = detailedProjects[currentSlide - 4];
+            const totalSold = (project.soldHours?.infra || 0) + (project.soldHours?.sse || 0) + (project.soldHours?.ti || 0);
+            const totalUsed = (project.usedHours?.infra || 0) + (project.usedHours?.sse || 0) + (project.usedHours?.ti || 0);
+            const hhColor = getRatioColor(totalUsed, totalSold);
+            const timeProgress = calculateTimeProgress(project.start, project.end);
+            const avgExec = project.steps.length > 0 ? project.steps.reduce((acc, s) => acc + s.perc, 0) / project.steps.length : 0;
+
+            return (
+                <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-center">
+                    <div className="flex justify-between items-start border-b border-nexus-800 pb-6">
+                        <div>
+                            <h2 className="text-4xl font-black text-white tracking-tight uppercase">{project.name}</h2>
+                            <div className="flex gap-4 mt-2">
+                                <span className="bg-nexus-800 text-nexus-400 px-3 py-1 rounded text-xs font-black border border-nexus-700">CC: {project.costCenter}</span>
+                                <span className="bg-nexus-800 text-nexus-400 px-3 py-1 rounded text-xs font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-[10px] font-black text-nexus-500 uppercase">Período de Obra</p>
+                           <p className="text-lg font-bold text-white italic">{project.start || 'N/A'} — {project.end || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase mb-2">Prazo Decorrido</p>
+                            <h4 className="text-4xl font-black text-white">{timeProgress}%</h4>
+                            <div className="w-full bg-nexus-900 h-2 rounded-full mt-4 overflow-hidden">
+                                <div className="h-full bg-blue-500" style={{ width: `${timeProgress}%` }} />
+                            </div>
+                        </div>
+                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase mb-2">Execução Média</p>
+                            <h4 className="text-4xl font-black text-green-500">{avgExec.toFixed(0)}%</h4>
+                            <div className="w-full bg-nexus-900 h-2 rounded-full mt-4 overflow-hidden">
+                                <div className="h-full bg-green-500" style={{ width: `${avgExec}%` }} />
+                            </div>
+                        </div>
+                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700 col-span-2">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase mb-2">Consumo Global H/H</p>
+                            <div className="flex justify-between items-baseline">
+                                <h4 className="text-4xl font-black text-white">{totalUsed} <span className="text-xs text-nexus-500">/ {totalSold}h</span></h4>
+                                <span className="text-xl font-bold" style={{ color: hhColor }}>{totalSold > 0 ? ((totalUsed/totalSold)*100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="w-full bg-nexus-900 h-2 rounded-full mt-4 overflow-hidden">
+                                <div className="h-full transition-all" style={{ width: `${Math.min(100, totalSold > 0 ? (totalUsed/totalSold)*100 : 0)}%`, backgroundColor: hhColor }} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-nexus-800/20 p-8 rounded-3xl border border-nexus-700 flex-1 min-h-0">
+                        <h4 className="text-xs font-black text-nexus-500 uppercase mb-6 tracking-widest flex items-center gap-2">
+                           <Target size={14} className="text-blue-500" /> Detalhamento de Progresso por Fase
+                        </h4>
+                        <div className="h-[280px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={project.steps} margin={{ top: 30, right: 30, left: 20, bottom: 20 }}>
+                                    <XAxis dataKey="name" stroke="#64748b" fontSize={11} fontWeight="bold" />
+                                    {/* Ajustado domínio do Y para dar espaço ao rótulo de 100% */}
+                                    <YAxis domain={[0, 115]} hide />
+                                    <Bar dataKey="perc" radius={[8, 8, 0, 0]} barSize={50}>
+                                        {project.steps.map((_, i) => <Cell key={i} fill={getBuColor(project.bu || '')} />)}
+                                        <LabelList dataKey="perc" position="top" fill="#fff" fontSize={14} fontWeight="black" formatter={(v:number) => `${v}%`} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // SLIDE FINAL
+        if (currentSlide === slidesCount - 1) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-12 animate-fadeIn">
+                    <div className="w-32 h-32 bg-blue-600 rounded-[40px] flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.3)] animate-bounce">
+                        <span className="text-7xl font-black text-white italic">N</span>
+                    </div>
+                    <div className="space-y-4">
+                        <h2 className="text-6xl font-black text-white tracking-tighter italic">Obrigado a todos!</h2>
+                        <p className="text-2xl text-nexus-400 font-medium">Equipe Teleinfo Engenharia — Tecnologia e Inteligência</p>
+                        <div className="flex justify-center gap-8 mt-12">
+                             <div className="flex items-center gap-2 text-nexus-500 font-bold uppercase text-xs tracking-widest border-r border-nexus-700 pr-8">
+                                <Activity size={16} /> Auditoria 2025
+                             </div>
+                             <div className="flex items-center gap-2 text-nexus-500 font-bold uppercase text-xs tracking-widest">
+                                <UserCheck size={16} /> A disposição
+                             </div>
+                        </div>
+                    </div>
+                    <div className="h-px w-64 bg-gradient-to-r from-transparent via-nexus-700 to-transparent" />
+                </div>
+            );
+        }
+
+        return null;
+    }
+
+    return (
+        <div className="relative">
+            {/* Preview Card */}
+            <div className="bg-nexus-800 p-12 rounded-3xl border border-nexus-700 shadow-2xl flex flex-col items-center justify-center text-center space-y-6 animate-fadeIn">
+                <div className="w-20 h-20 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center">
+                    <MonitorPlay size={40} />
+                </div>
+                <div>
+                    <h3 className="text-2xl font-black text-white italic">Motor de Apresentação Nexus</h3>
+                    <p className="text-nexus-400 max-w-sm mt-2 font-medium">Narrativa dinâmica: Capa, Portfólio, BUs, Compras Críticas, Obras Auditadas e Conclusão.</p>
+                </div>
+                <button 
+                    onClick={() => { setIsFullScreen(true); setCurrentSlide(0); }}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl shadow-blue-900/40 transition-all active:scale-95"
+                >
+                    <Maximize2 size={18} /> Iniciar Apresentação Executiva
+                </button>
+                <div className="flex gap-4 text-[10px] text-nexus-500 font-black uppercase tracking-tighter opacity-50">
+                   <span className="flex items-center gap-1"><KeyboardArrowIcon /> Navegar</span>
+                   <span className="flex items-center gap-1"><EscapeIcon /> Sair</span>
+                </div>
+            </div>
+
+            {/* FULL SCREEN OVERLAY */}
+            {isFullScreen && (
+                <div className="fixed inset-0 bg-nexus-900 z-[1000] flex flex-col overflow-hidden">
+                    {/* Header Slide */}
+                    <div className="h-20 border-b border-nexus-800 px-12 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-white italic">N</div>
+                            <span className="text-nexus-500 font-black uppercase text-xs tracking-widest">Nexus Intelligence Platform — Teleinfo Engenharia</span>
+                        </div>
+                        <button onClick={exitPresentation} className="text-nexus-500 hover:text-white transition-colors p-2"><X size={28} /></button>
+                    </div>
+
+                    {/* Slide Content */}
+                    <div className="flex-1 px-20 py-12 relative overflow-hidden flex flex-col items-center justify-center">
+                        <div className="w-full max-w-6xl h-full">
+                           {renderSlide()}
+                        </div>
+                    </div>
+
+                    {/* Detail Modal Overlay within Presentation */}
+                    {selectedBuyingDetail && (
+                        <div className="fixed inset-0 bg-black/90 z-[1010] flex items-center justify-center p-8 backdrop-blur-xl animate-fadeIn" onClick={() => setSelectedBuyingDetail(null)}>
+                            <div className="bg-nexus-800 border-2 border-red-500/50 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                                <div className="bg-red-600 p-6 flex justify-between items-center">
+                                    <div className="flex items-center gap-3 text-white">
+                                        <AlertTriangle size={32} />
+                                        <div>
+                                            <h3 className="font-black text-2xl uppercase italic">Analise de Criticidade</h3>
+                                            <p className="text-xs font-bold text-white/70 uppercase">Detalhes da Cadeia de Suprimentos</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setSelectedBuyingDetail(null)} className="text-white hover:bg-white/10 p-2 rounded-full transition-colors"><X size={32}/></button>
+                                </div>
+                                <div className="p-10 space-y-8">
+                                    <div className="grid grid-cols-2 gap-8">
+                                        <div className="col-span-2">
+                                            <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Projeto</label>
+                                            <h4 className="text-3xl font-black text-white mt-1">{selectedBuyingDetail.projeto}</h4>
+                                            <p className="text-nexus-400 font-mono text-lg mt-1 tracking-tighter">ID: {selectedBuyingDetail.numeroProjeto}</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-6">
+                                        <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
+                                            <label className="text-xs font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
+                                                <ShoppingCart size={14} /> Materiais a Comprar (Pendentes)
+                                            </label>
+                                            <p className="text-white text-xl mt-3 leading-relaxed font-medium">{selectedBuyingDetail.aComprar}</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
+                                                <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Já Adquiridos</label>
+                                                <p className="text-nexus-300 text-lg mt-2 font-bold">{selectedBuyingDetail.comprados}</p>
+                                            </div>
+                                            <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
+                                                <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Entregues</label>
+                                                <p className="text-nexus-300 text-lg mt-2 font-bold">{selectedBuyingDetail.entregue}</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-blue-600/20 p-8 rounded-2xl border border-blue-500/30 flex justify-between items-center">
+                                            <div>
+                                                <label className="text-xs font-black text-blue-400 uppercase tracking-widest">Data Disponível p/ Obra</label>
+                                                <p className="text-white text-3xl font-black italic mt-1">{selectedBuyingDetail.dataDisponivel}</p>
+                                            </div>
+                                            <Clock size={48} className="text-blue-500 opacity-30" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-8 bg-nexus-900 flex justify-end">
+                                    <button onClick={() => setSelectedBuyingDetail(null)} className="px-10 py-4 bg-nexus-700 hover:bg-nexus-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Fechar Detalhes</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Footer Slide */}
+                    <div className="h-24 border-t border-nexus-800 px-12 flex items-center justify-between">
+                        <div className="flex gap-2">
+                            <button onClick={prevSlide} className="p-4 bg-nexus-800 hover:bg-nexus-700 text-white rounded-full transition-all active:scale-90"><ChevronLeft size={24} /></button>
+                            <button onClick={nextSlide} className="p-4 bg-nexus-800 hover:bg-nexus-700 text-white rounded-full transition-all active:scale-90"><ChevronRight size={24} /></button>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-white font-black text-xl italic">{currentSlide + 1} / {slidesCount}</span>
+                            <div className="w-48 h-1 bg-nexus-800 mt-2 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${((currentSlide + 1) / slidesCount) * 100}%` }} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const KeyboardArrowIcon = () => (
+    <div className="flex gap-0.5">
+        <div className="w-4 h-4 border border-nexus-500 rounded flex items-center justify-center"><ChevronLeft size={10}/></div>
+        <div className="w-4 h-4 border border-nexus-500 rounded flex items-center justify-center"><ChevronRight size={10}/></div>
+    </div>
+);
+
+const EscapeIcon = () => (
+    <div className="px-1 border border-nexus-500 rounded text-[8px] flex items-center justify-center">ESC</div>
+);
+
 export const TeleinfoReport: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
+    const [generalProjects] = useSupabaseData<any[]>('general_projects', []);
+    const [detailedProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
+    const [buyingStatus] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
 
     return (
         <div className="flex flex-col h-full space-y-6">
@@ -623,10 +1016,11 @@ export const TeleinfoReport: React.FC = () => {
                 {activeTab === 'dashboard' && <GeneralDashboardView />}
                 {activeTab === 'monitoring' && <MonitoringView />}
                 {activeTab === 'presentation' && (
-                  <div className="flex flex-col items-center justify-center h-64 bg-nexus-800/30 rounded-2xl border-2 border-dashed border-nexus-700">
-                      <FilePlus size={48} className="text-nexus-600 mb-3" />
-                      <p className="text-nexus-500 font-medium">Módulo de Apresentação em desenvolvimento</p>
-                  </div>
+                    <PresentationView 
+                        generalProjects={generalProjects} 
+                        detailedProjects={detailedProjects} 
+                        buyingStatus={buyingStatus}
+                    />
                 )}
             </div>
         </div>
