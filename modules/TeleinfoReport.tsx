@@ -1,28 +1,28 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ComposedChart, Line, Area
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie
 } from 'recharts';
 import { 
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
-  Save, FilePlus, Trash2, Plus, Download, Tv, ArrowLeft, ArrowRight, User, Edit, Calendar, Layers, Activity, Radar, LayoutDashboard
+  Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity, PieChart as PieIcon,
+  Layers, Clock, ClipboardList
 } from 'lucide-react';
 import { generateProjectRiskAnalysis, generateDetailedProjectRiskAnalysis } from '../services/geminiService';
-import { Project, DetailedProject, DetailedProjectStep, BuHours, KeyFact, NextStep, MultiPhaseProject, ProductionData, FutureDelivery } from '../types';
-import { syncToSupabase, fetchFromSupabase } from '../services/supabase';
-
-// Declare html2pdf for TypeScript since it is loaded via CDN
-declare const html2pdf: any;
+import { Project, DetailedProject, ProductionData } from '../types';
+import { supabase, syncToSupabase, fetchFromSupabase } from '../services/supabase';
 
 // Hook para persistência no Supabase
-function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>, () => void] {
     const [storedValue, setStoredValue] = useState<T>(initialValue);
 
+    const load = async () => {
+        const data = await fetchFromSupabase<any>(tableName);
+        if (data && data.length > 0) setStoredValue(data as unknown as T);
+        else if (data && data.length === 0) setStoredValue([] as unknown as T);
+    };
+
     useEffect(() => {
-        const load = async () => {
-            const data = await fetchFromSupabase<any>(tableName);
-            if (data && data.length > 0) setStoredValue(data as unknown as T);
-        };
         load();
     }, [tableName]);
 
@@ -32,107 +32,285 @@ function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispa
         if (Array.isArray(val)) syncToSupabase(tableName, val);
     };
 
-    return [storedValue, setValue];
+    return [storedValue, setValue, load];
 }
+
+// --- CONSTANTES DE CORES ---
+const BU_COLORS: Record<string, string> = {
+    'INFRAESTRUTURA': '#f97316', // Laranja
+    'SEGURANÇA': '#22c55e',      // Verde
+    'TECNOLOGIA': '#3b82f6',     // Azul
+    'AUTOMAÇÃO': '#94a3b8',      // Cinza
+    'DEFAULT': '#64748b'
+};
+
+const getBuColor = (bu: string) => {
+    const upper = bu.toUpperCase();
+    if (upper.includes('INFRA')) return BU_COLORS['INFRAESTRUTURA'];
+    if (upper.includes('SEGURANÇA') || upper.includes('SSE')) return BU_COLORS['SEGURANÇA'];
+    if (upper.includes('TECNOLOGIA') || upper.includes('TI')) return BU_COLORS['TECNOLOGIA'];
+    if (upper.includes('AUTOMAÇÃO') || upper.includes('AUT')) return BU_COLORS['AUTOMAÇÃO'];
+    return BU_COLORS['DEFAULT'];
+};
 
 // --- UTILS ---
 
-const normalizePercent = (value: any): number | null => {
-    if (value == null) return null;
-    if (typeof value !== "string") value = String(value);
-    const cleaned = value.replace("%", "").trim();
-    if (!cleaned) return null;
-    const num = parseFloat(cleaned.replace(",", "."));
-    return isNaN(num) ? null : num;
-};
-
-const normalizeStatus = (status: any): string => {
-    if (!status) return "";
-    return status.toString().trim().toUpperCase();
-};
-
-const parseTeleinfoCsv = (text: string): Project[] => {
+const parseGeneralCsv = (text: string): any[] => {
     if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
-    const allLines = text.split(/\r?\n/);
-    const headerRowIndex = allLines.findIndex(l => l.toUpperCase().includes('CLIENTE'));
-    if (headerRowIndex === -1) return [];
-    const lines = allLines.slice(headerRowIndex).filter(l => l.replace(/;/g, '').trim().length > 0);
-    if (lines.length < 2) return [];
-    const sep = ";";
-    const headers = lines[0].split(sep).map(h => h.trim());
-    const idxMap = {
-        cliente: headers.findIndex(h => h.toUpperCase() === 'CLIENTE'),
-        tipoProjeto: headers.findIndex(h => h.toUpperCase() === 'TIPO DE PROJETO'),
-        cCusto: headers.findIndex(h => h.toUpperCase() === 'C.CUSTO'),
-        status: headers.findIndex(h => h.toUpperCase() === 'STATUS'),
-        perc: headers.findIndex(h => h === '%'),
-    };
-    return lines.slice(1).map(line => {
-        const cells = line.split(sep);
-        return {
-            'CLIENTE': cells[idxMap.cliente]?.trim() || "",
-            'TIPO DE PROJETO': cells[idxMap.tipoProjeto]?.trim() || "",
-            'TIPO DE PRODUTO': "", 'BUs': "",
-            'C.Custo': cells[idxMap.cCusto]?.trim() || "",
-            'STATUS': normalizeStatus(cells[idxMap.status]),
-            perc: normalizePercent(cells[idxMap.perc]),
-        };
-    });
-};
-
-const parseProductionCsv = (text: string): ProductionData[] => {
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    return lines.slice(1).map(line => {
-        const cols = line.split(';');
-        const dateParts = cols[0].trim().split('/');
+    if (lines.length < 2) return [];
+    
+    const sep = ";";
+    // ITEM; CLIENTE; TIPO DE PROJETO; TIPO DE PRODUTO; SQUAD LEADER; BUs; C.Custo; ESCOPO; STATUS; %
+    return lines.slice(1).map((line, idx) => {
+        const cells = line.split(sep);
+        const percRaw = cells[9]?.replace('%', '').replace(',', '.').trim();
         return {
-            date: `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`,
-            meta: parseFloat(cols[1].replace(',', '.')),
-            realized: parseFloat(cols[2]?.replace(',', '.'))
+            id: `gen-${idx}-${Date.now()}`,
+            item: cells[0]?.trim() || "",
+            cliente: cells[1]?.trim() || "",
+            tipoProjeto: cells[2]?.trim() || "",
+            tipoProduto: cells[3]?.trim() || "",
+            squadLeader: cells[4]?.trim() || "",
+            bus: cells[5]?.trim() || "",
+            cCusto: cells[6]?.trim() || "",
+            escopo: cells[7]?.trim() || "",
+            status: cells[8]?.trim() || "",
+            perc: parseFloat(percRaw) || 0
         };
     });
-};
-
-const statusColors: { [key: string]: { pill: string; chart: string } } = {
-    'FINALIZADO': { pill: 'bg-green-500/10 text-green-400 border border-green-500/20', chart: '#22c55e' },
-    'EM ANDAMENTO': { pill: 'bg-blue-500/10 text-blue-400 border border-blue-500/20', chart: '#3b82f6' },
-    'PARALIZADO': { pill: 'bg-red-500/10 text-red-400 border border-red-500/20', chart: '#ef4444' },
-    'NÃO INICIADO': { pill: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20', chart: '#eab308' },
-    'DEFAULT': { pill: 'bg-nexus-500/10 text-nexus-400 border border-nexus-500/20', chart: '#6b7280' },
-};
-
-const getStatusChartColor = (status: string) => {
-    const normalized = normalizeStatus(status);
-    if (normalized.startsWith("FINALIZADO")) return statusColors['FINALIZADO'].chart;
-    if (normalized.startsWith("EM ANDAMENTO")) return statusColors['EM ANDAMENTO'].chart;
-    if (normalized.startsWith("PARALIZADO")) return statusColors['PARALIZADO'].chart;
-    if (normalized.startsWith("NÃO INICIADO")) return statusColors['NÃO INICIADO'].chart;
-    return statusColors['DEFAULT'].chart;
 };
 
 // --- COMPONENTS ---
 
-const RiskAnalysisModal: React.FC<{ content: string; isLoading: boolean; title: string; onClose: () => void }> = ({ content, isLoading, title, onClose }) => (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-nexus-800 border border-nexus-700 rounded-xl p-6 w-full max-w-lg relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <button onClick={onClose} className="absolute top-4 right-4 text-nexus-400 hover:text-white"><X size={20} /></button>
-            <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2"><Bot className="text-purple-400" /> {title}</h3>
-            {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-48 space-y-4">
-                    <BrainCircuit size={48} className="animate-pulse text-blue-500" />
-                    <span className="text-nexus-300">Consultando Gemini AI...</span>
+const GeneralDashboardView: React.FC = () => {
+    const [projects, setProjects] = useSupabaseData<any[]>('general_projects', []);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const stats = useMemo(() => {
+        if (!projects.length) return { statusCounts: {}, avgCompletion: 0, total: 0, naoIniciados: 0 };
+        const counts: Record<string, number> = {};
+        let totalPerc = 0;
+        let naoIniciados = 0;
+        
+        projects.forEach(p => {
+            const sRaw = p.status?.trim() || 'NÃO DEFINIDO';
+            const sUpper = sRaw.toUpperCase();
+            
+            // Incrementar contagem por status (baseado na coluna STATUS)
+            counts[sRaw] = (counts[sRaw] || 0) + 1;
+            
+            totalPerc += p.perc;
+            
+            // CORREÇÃO: Lógica baseada exclusivamente no texto da coluna Status (ignora acentos e espaços extras)
+            const isNaoIniciado = sUpper.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO");
+            
+            if (isNaoIniciado) {
+                naoIniciados++;
+            }
+        });
+
+        return {
+            statusCounts: counts,
+            avgCompletion: (totalPerc / projects.length).toFixed(1),
+            total: projects.length,
+            naoIniciados: naoIniciados
+        };
+    }, [projects]);
+
+    const buData = useMemo(() => {
+        const bus: Record<string, number> = {};
+        projects.forEach(p => {
+            const b = p.bus || 'OUTROS';
+            bus[b] = (bus[b] || 0) + 1;
+        });
+        return Object.entries(bus).map(([name, value]) => ({ name, value }));
+    }, [projects]);
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            const parsed = parseGeneralCsv(evt.target?.result as string);
+            // Fixar no sistema: Limpa antigos e sincroniza novos via Supabase
+            const { error: deleteError } = await supabase.from('general_projects').delete().neq('id', '0');
+            
+            if (!deleteError) {
+                setProjects(parsed);
+                alert("Dados gerais importados e fixados no sistema!");
+            } else {
+                console.error("Erro ao sincronizar:", deleteError);
+                setProjects(parsed);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    return (
+        <div className="space-y-6 animate-fadeIn">
+            <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <LayoutDashboard className="text-blue-400" /> Visão Geral de Projetos
+                </h3>
+                <div className="flex gap-2">
+                    <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                    <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg shadow-blue-900/40">
+                        <UploadCloud size={18} /> Importar Geral CSV
+                    </button>
+                    {projects.length > 0 && (
+                        <button onClick={async () => { if(confirm("Apagar todos os projetos gerais?")) { await supabase.from('general_projects').delete().neq('id', '0'); setProjects([]); }}} className="p-2 bg-nexus-800 border border-nexus-700 text-red-400 rounded-lg hover:bg-red-500/10">
+                            <Trash2 size={18} />
+                        </button>
+                    )}
                 </div>
-            ) : (
-                <div className="prose prose-invert prose-sm max-w-none text-nexus-300 overflow-y-auto max-h-[60vh]" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />') }} />
-            )}
+            </div>
+
+            {/* Painel de Indicadores Baseados na Coluna Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {/* Total de Projetos */}
+                <div className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
+                    <p className="text-[10px] font-black text-nexus-400 uppercase tracking-widest mb-1">Total de Projetos</p>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-3xl font-black text-white">{stats.total}</h3>
+                        <Layers className="text-nexus-500" size={20} />
+                    </div>
+                </div>
+
+                {/* Finalização Global */}
+                <div className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
+                    <div className="flex justify-between items-start mb-2">
+                        <p className="text-xs font-black text-nexus-400 uppercase tracking-widest">Finalização Global</p>
+                        <Target className="text-blue-400" size={18} />
+                    </div>
+                    <h3 className="text-3xl font-black text-white">{stats.avgCompletion}%</h3>
+                    <div className="w-full bg-nexus-900 h-1.5 rounded-full mt-3 overflow-hidden">
+                        <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${stats.avgCompletion}%` }} />
+                    </div>
+                </div>
+
+                {/* Não Iniciados - CORRIGIDO */}
+                <div className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
+                    <p className="text-[10px] font-black text-nexus-400 uppercase tracking-widest mb-1">Não Iniciados</p>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-3xl font-black text-red-400">{stats.naoIniciados}</h3>
+                        <Clock className="text-red-500" size={20} />
+                    </div>
+                </div>
+
+                {/* Painéis Dinâmicos baseados nos outros Status encontrados na planilha */}
+                {Object.entries(stats.statusCounts)
+                  .filter(([status]) => {
+                      const s = status.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                      return !s.includes('NAO INICIADO');
+                  })
+                  .slice(0, 2).map(([status, count]) => (
+                    <div key={status} className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
+                        <div className="flex justify-between items-start mb-2">
+                            <p className="text-[10px] font-black text-nexus-400 uppercase tracking-tighter truncate w-3/4">{status}</p>
+                            <ClipboardList className="text-green-500" size={16} />
+                        </div>
+                        <h3 className="text-3xl font-black text-white">{count}</h3>
+                        <p className="text-[9px] text-nexus-500 mt-1">Quantidade por Status</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Gráfico Status por Unidade */}
+            <div className="w-full bg-nexus-800 p-6 rounded-xl border border-nexus-700 shadow-xl">
+                <h4 className="text-white font-bold mb-6 flex items-center gap-2 text-sm">
+                    <Activity size={16} className="text-blue-400" /> Status por Unidade de Negócio (BUs)
+                </h4>
+                <div className="h-[400px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={buData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                            <YAxis stroke="#64748b" fontSize={11} axisLine={false} tickLine={false} />
+                            <Tooltip 
+                                cursor={{ fill: '#1e293b' }} 
+                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px' }}
+                                itemStyle={{ color: '#ffffff', fontWeight: 'bold' }} // Hover com texto branco (CORREÇÃO DE CORES)
+                                labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                            />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={60}>
+                                {buData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={getBuColor(entry.name)} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            {/* Lista Colorida por BU */}
+            <div className="bg-nexus-800 rounded-xl border border-nexus-700 overflow-hidden shadow-2xl">
+                <div className="p-4 bg-nexus-900/40 border-b border-nexus-700 flex justify-between items-center">
+                    <h4 className="text-white font-bold text-sm">Lista de Obras</h4>
+                    <div className="flex gap-4">
+                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-orange-500" /><span className="text-[9px] text-nexus-400 font-bold uppercase">INFRA</span></div>
+                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[9px] text-nexus-400 font-bold uppercase">SEGURANÇA</span></div>
+                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-[9px] text-nexus-400 font-bold uppercase">TECNOLOGIA</span></div>
+                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400" /><span className="text-[9px] text-nexus-400 font-bold uppercase">AUTOMAÇÃO</span></div>
+                    </div>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-nexus-900/80 text-nexus-500 uppercase font-black text-[10px] tracking-widest">
+                            <tr>
+                                <th className="px-6 py-4">Item</th>
+                                <th className="px-6 py-4">Cliente / Projeto</th>
+                                <th className="px-6 py-4">BU / Squad</th>
+                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4 text-right">%</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-nexus-700">
+                            {projects.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-nexus-500 italic">Carregue a planilha geral para visualizar os dados.</td>
+                                </tr>
+                            ) : (
+                                projects.map((p) => {
+                                    const color = getBuColor(p.bus);
+                                    return (
+                                        <tr key={p.id} className="hover:bg-nexus-700/20 transition-all border-l-4" style={{ borderColor: color }}>
+                                            <td className="px-6 py-4 font-mono text-xs text-nexus-400">#{p.item}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-white text-sm">{p.cliente}</span>
+                                                    <span className="text-[10px] text-nexus-400 uppercase">{p.tipoProjeto}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold" style={{ color: color }}>{p.bus}</span>
+                                                    <span className="text-[10px] text-nexus-500">{p.squadLeader}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-nexus-900 border border-nexus-700 text-nexus-300">
+                                                    {p.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className={`font-black ${p.perc === 100 ? 'text-green-500' : 'text-white'}`}>{p.perc}%</span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const MonitoringView: React.FC = () => {
     const [projects, setProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
     const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
-    const [riskModal, setRiskModal] = useState({ isOpen: false, content: '', isLoading: false });
     const [editingProject, setEditingProject] = useState<DetailedProject | null>(null);
 
     const handleSave = () => {
@@ -173,8 +351,8 @@ const MonitoringView: React.FC = () => {
                                     <td className="px-6 py-4">{p.start}</td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2">
-                                            <button onClick={() => { setEditingProject(p); setViewMode('form'); }} className="p-2 text-blue-400"><Edit size={16}/></button>
-                                            <button onClick={() => setProjects(projects.filter(x => x.id !== p.id))} className="p-2 text-red-400"><Trash2 size={16}/></button>
+                                            <button onClick={() => { setEditingProject(p); setViewMode('form'); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded"><GanttChartSquare size={16}/></button>
+                                            <button onClick={() => setProjects(projects.filter(x => x.id !== p.id))} className="p-2 text-red-400 hover:bg-red-500/10 rounded"><Trash2 size={16}/></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -202,24 +380,33 @@ const MonitoringView: React.FC = () => {
 };
 
 export const TeleinfoReport: React.FC = () => {
-    const [projects, setProjects] = useState<Project[]>([]);
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
 
     return (
         <div className="flex flex-col h-full space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">Relatórios & Auditoria IA</h2>
-                <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Relatórios & Auditoria IA</h2>
+                  <p className="text-nexus-400 text-sm">Visão executiva e auditoria de obras Teleinfo</p>
+                </div>
+                <div className="flex bg-nexus-800 p-1.5 rounded-xl border border-nexus-700 shadow-xl">
                     {['dashboard', 'monitoring', 'presentation'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab as any)}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-400 hover:text-white'}`}>
+                            className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-500 hover:text-white'}`}>
                             {tab === 'dashboard' ? 'Geral' : tab === 'monitoring' ? 'Auditoria' : 'Slides'}
                         </button>
                     ))}
                 </div>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-h-0">
+                {activeTab === 'dashboard' && <GeneralDashboardView />}
                 {activeTab === 'monitoring' && <MonitoringView />}
+                {activeTab === 'presentation' && (
+                  <div className="flex flex-col items-center justify-center h-64 bg-nexus-800/30 rounded-2xl border-2 border-dashed border-nexus-700">
+                      <FilePlus size={48} className="text-nexus-600 mb-3" />
+                      <p className="text-nexus-500 font-medium">Módulo de Apresentação em desenvolvimento</p>
+                  </div>
+                )}
             </div>
         </div>
     );

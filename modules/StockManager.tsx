@@ -1,37 +1,27 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
-  PieChart, Pie, Legend 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
-import { StockItem, SLAProject, MultiPhaseProject, SLAStatus, ProjectBuyingStatus } from '../types';
+import { ProjectBuyingStatus } from '../types';
 import { 
-  ArrowUpRight, ArrowDownRight, Package, DollarSign, UploadCloud, 
-  AlertTriangle, CheckCircle, Clock, X, Mail, BarChart2, Layers, ShoppingCart, Calendar, Info, Trash2
+  Package, UploadCloud, AlertTriangle, CheckCircle, Clock, X, ShoppingCart, Trash2, Info, Eye
 } from 'lucide-react';
-import { syncToSupabase, fetchFromSupabase } from '../services/supabase';
+import { supabase, syncToSupabase, fetchFromSupabase } from '../services/supabase';
 
-// --- CONSTANTS & UTILS ---
+// --- UTILS ---
 
-const SLA_DAYS_WARNING = 5;
-const SLA_DAYS_CRITICAL = 7;
-
-const COLORS = {
-  OK: '#22c55e',
-  WARNING: '#eab308',
-  CRITICAL: '#ef4444'
-};
-
-function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>, () => void] {
     const [storedValue, setStoredValue] = useState<T>(initialValue);
 
+    const loadData = async () => {
+        const data = await fetchFromSupabase<any>(tableName);
+        if (data) {
+            setStoredValue(data as unknown as T);
+        }
+    };
+
     useEffect(() => {
-        const loadData = async () => {
-            const data = await fetchFromSupabase<any>(tableName);
-            if (data && data.length > 0) {
-                setStoredValue(data as unknown as T);
-            }
-        };
         loadData();
     }, [tableName]);
 
@@ -43,140 +33,277 @@ function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispa
         }
     };
 
-    return [storedValue, setValue];
+    return [storedValue, setValue, loadData];
 }
 
 const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
+    // Remove BOM se existir
     if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     const result: ProjectBuyingStatus[] = [];
+    
+    // Esperado: Título; Nº Projeto; Criticidade; A Comprar; Comprado; Entregue; Data disponivel
     for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(';');
         if (cols.length < 3) continue;
+        
         const rawStatus = cols[2]?.trim() || 'Padrão';
         let status: 'Padrão' | 'Intermediário' | 'Crítico' = 'Padrão';
+        
         if (rawStatus.toLowerCase().includes('critico') || rawStatus.toLowerCase().includes('crítico')) status = 'Crítico';
         else if (rawStatus.toLowerCase().includes('intermediario') || rawStatus.toLowerCase().includes('intermediário')) status = 'Intermediário';
         
         result.push({
             id: `buy-${i}-${Date.now()}`,
-            projeto: cols[0]?.trim() || 'N/A',
-            numeroProjeto: cols[1]?.trim() || 'N/A',
-            status: status,
+            projeto: cols[0]?.trim() || 'N/A', // Título
+            numeroProjeto: cols[1]?.trim() || 'N/A', // Nº Projeto
+            status: status, // Criticidade
             aComprar: cols[3]?.trim() || '-',
-            comprados: cols[4]?.trim() || '-',
+            comprados: cols[4]?.trim() || '-', // Comprado
             entregue: cols[5]?.trim() || '-',
-            dataDisponivel: cols[6]?.trim() || 'A definir',
+            dataDisponivel: cols[6]?.trim() || 'A definir', // Data disponível
         });
     }
     return result;
 };
 
-const parseProjectsCSV = (text: string): SLAProject[] => {
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    return lines.slice(1).map((line, i) => {
-        const cols = line.split(';');
-        return {
-            id: `proj-${i}-${Date.now()}`,
-            titulo: cols[0]?.trim() || 'Sem Título',
-            numeroProjeto: cols[1]?.trim() || 'N/A',
-            inicioFase: cols[2]?.trim() || new Date().toISOString(),
-            diasNaFase: parseFloat(cols[3]?.replace(',', '.') || '0'),
-            entregaTeleinfo: cols[4]?.trim()
-        };
-    });
-};
-
-const getSLAStatus = (days: number): SLAStatus => {
-  if (days > SLA_DAYS_CRITICAL) return SLAStatus.CRITICAL;
-  if (days > SLA_DAYS_WARNING) return SLAStatus.WARNING;
-  return SLAStatus.OK;
-};
-
 // --- COMPONENTS ---
 
-const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; colorClass: string }> = ({ title, value, icon, colorClass }) => (
-    <div className="bg-nexus-800 rounded-xl border border-nexus-700 p-6 flex items-start justify-between">
+const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; colorClass: string; textColor: string }> = ({ title, value, icon, colorClass, textColor }) => (
+    <div className="bg-nexus-800 rounded-xl border border-nexus-700 p-5 flex items-start justify-between shadow-lg">
       <div>
-        <p className="text-sm font-medium text-nexus-400 mb-1">{title}</p>
-        <h3 className="text-2xl font-bold text-white">{value}</h3>
+        <p className="text-xs font-semibold text-nexus-400 uppercase tracking-wider mb-1">{title}</p>
+        <h3 className={`text-2xl font-bold ${textColor}`}>{value}</h3>
       </div>
-      <div className={`p-3 rounded-lg ${colorClass} text-white`}>{icon}</div>
+      <div className={`p-3 rounded-lg ${colorClass} text-white shadow-inner`}>{icon}</div>
     </div>
 );
 
-// --- VIEW COMPONENTS ---
+const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void }> = ({ project, onClose }) => (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
+        <div className="bg-nexus-800 border-2 border-red-500/50 rounded-2xl w-full max-w-lg shadow-2xl animate-fadeIn overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-red-600 p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2 text-white">
+                    <AlertTriangle size={24} />
+                    <h3 className="font-bold text-lg">Detalhes Críticos do Projeto</h3>
+                </div>
+                <button onClick={onClose} className="text-white/80 hover:text-white"><X size={24}/></button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                        <label className="text-[10px] uppercase font-bold text-nexus-500">Título do Projeto</label>
+                        <p className="text-lg font-bold text-white">{project.projeto}</p>
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-nexus-500">Nº CC / Projeto</label>
+                        <p className="text-white font-mono">{project.numeroProjeto}</p>
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-nexus-500">Criticidade</label>
+                        <span className="block w-fit bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded mt-1">CRÍTICO</span>
+                    </div>
+                </div>
+
+                <div className="border-t border-nexus-700 pt-4 grid grid-cols-1 gap-4">
+                    <div className="bg-nexus-900 p-3 rounded-lg border border-nexus-700">
+                        <label className="text-[10px] uppercase font-bold text-nexus-400">Materiais a Comprar</label>
+                        <p className="text-red-400 text-sm mt-1 font-medium">{project.aComprar}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                         <div className="bg-nexus-900 p-3 rounded-lg border border-nexus-700">
+                            <label className="text-[10px] uppercase font-bold text-nexus-400">Já Comprados</label>
+                            <p className="text-nexus-200 text-sm mt-1">{project.comprados}</p>
+                        </div>
+                        <div className="bg-nexus-900 p-3 rounded-lg border border-nexus-700">
+                            <label className="text-[10px] uppercase font-bold text-nexus-400">Entregues</label>
+                            <p className="text-nexus-200 text-sm mt-1">{project.entregue}</p>
+                        </div>
+                    </div>
+                    <div className="bg-blue-600/10 p-3 rounded-lg border border-blue-500/30">
+                        <label className="text-[10px] uppercase font-bold text-blue-400">Data Disponível p/ Cliente</label>
+                        <p className="text-white text-sm mt-1 font-bold">{project.dataDisponivel}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div className="bg-nexus-900 p-4 border-t border-nexus-700 flex justify-end">
+                <button onClick={onClose} className="px-6 py-2 bg-nexus-700 text-white rounded-lg hover:bg-nexus-600 transition-colors font-bold text-sm">Fechar</button>
+            </div>
+        </div>
+    </div>
+);
+
+// --- MAIN VIEW ---
 
 const ProjectBuyingStatusView: React.FC = () => {
-    const [buyingData, setBuyingData] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+    const [buyingData, setBuyingData, reload] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
     const [selectedProject, setSelectedProject] = useState<ProjectBuyingStatus | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const stats = useMemo(() => ({
         total: buyingData?.length || 0,
-        critical: buyingData?.filter(p => p.status === 'Crítico').length || 0,
+        padrao: buyingData?.filter(p => p.status === 'Padrão').length || 0,
+        intermediario: buyingData?.filter(p => p.status === 'Intermediário').length || 0,
+        critico: buyingData?.filter(p => p.status === 'Crítico').length || 0,
     }), [buyingData]);
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        
         const reader = new FileReader();
-        reader.onload = (evt) => {
+        reader.onload = async (evt) => {
             const parsed = parseBuyingStatusCSV(evt.target?.result as string);
-            setBuyingData(parsed);
+            
+            // "Ficar fixado até outro ser importado": 
+            // Limpamos os dados antigos antes de inserir os novos para manter integridade.
+            const { error: deleteError } = await supabase.from('buying_status').delete().neq('id', '0');
+            
+            if (!deleteError) {
+                setBuyingData(parsed);
+                alert("Dados de estoque atualizados com sucesso!");
+            } else {
+                console.error("Erro ao limpar dados antigos:", deleteError);
+                // Mesmo com erro na limpeza, tentamos salvar por cima
+                setBuyingData(parsed);
+            }
         };
         reader.readAsText(file);
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <ShoppingCart size={20} className="text-blue-400"/> Status de Compras
+        <div className="space-y-6 animate-fadeIn">
+            {/* Header com Importação */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <ShoppingCart size={24} className="text-blue-400"/> Status de Compras
                 </h3>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                     <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-nexus-800 border border-nexus-600 rounded-lg text-sm text-white hover:border-blue-500 transition-all">
-                        <UploadCloud size={16} /> Importar Status
+                    <button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-900/40"
+                    >
+                        <UploadCloud size={18} /> Importar Planilha CSV
                     </button>
-                    {buyingData?.length > 0 && <button onClick={() => setBuyingData([])} className="p-2 text-nexus-500 hover:text-red-400"><Trash2 size={20}/></button>}
+                    {buyingData?.length > 0 && (
+                        <button 
+                            onClick={async () => {
+                                if(confirm("Deseja realmente apagar todos os dados de compras?")) {
+                                    await supabase.from('buying_status').delete().neq('id', '0');
+                                    setBuyingData([]);
+                                }
+                            }} 
+                            className="p-2.5 text-nexus-400 hover:text-red-400 bg-nexus-800 hover:bg-red-500/10 rounded-xl transition-all border border-nexus-700"
+                        >
+                            <Trash2 size={20}/>
+                        </button>
+                    )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <StatCard title="Projetos Mapeados" value={stats.total} icon={<Package size={24}/>} colorClass="bg-blue-600" />
-                <StatCard title="Status Crítico" value={stats.critical} icon={<AlertTriangle size={24}/>} colorClass="bg-red-600" />
+            {/* Painel de Estatísticas - 4 Indicadores */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard 
+                    title="Total Mapeado" 
+                    value={stats.total} 
+                    icon={<Package size={22}/>} 
+                    colorClass="bg-blue-600" 
+                    textColor="text-white"
+                />
+                <StatCard 
+                    title="Padrão" 
+                    value={stats.padrao} 
+                    icon={<CheckCircle size={22}/>} 
+                    colorClass="bg-green-600" 
+                    textColor="text-green-400"
+                />
+                <StatCard 
+                    title="Intermediário" 
+                    value={stats.intermediario} 
+                    icon={<Clock size={22}/>} 
+                    colorClass="bg-yellow-600" 
+                    textColor="text-yellow-400"
+                />
+                <StatCard 
+                    title="Crítico" 
+                    value={stats.critico} 
+                    icon={<AlertTriangle size={22}/>} 
+                    colorClass="bg-red-600" 
+                    textColor="text-red-400"
+                />
             </div>
 
-            <div className="bg-nexus-800 rounded-xl border border-nexus-700 overflow-hidden shadow-xl">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-nexus-900 text-nexus-400 uppercase font-bold text-[10px]">
-                        <tr>
-                            <th className="px-6 py-4">Projeto</th>
-                            <th className="px-6 py-4">Centro de Custo</th>
-                            <th className="px-6 py-4">Criticidade</th>
-                            <th className="px-6 py-4">A Comprar</th>
-                            <th className="px-6 py-4">Data Disponível</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-nexus-700">
-                        {buyingData?.map((item) => (
-                            <tr key={item.id} className={`hover:bg-nexus-700/30 ${item.status === 'Crítico' ? 'text-red-400 border-l-2 border-red-500' : 'text-nexus-300'}`}>
-                                <td className="px-6 py-4 font-bold">{item.projeto}</td>
-                                <td className="px-6 py-4 font-mono text-xs">{item.numeroProjeto}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${item.status === 'Crítico' ? 'bg-red-500 text-white' : 'bg-nexus-600'}`}>
-                                        {item.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4">{item.aComprar}</td>
-                                <td className="px-6 py-4 font-mono text-xs">{item.dataDisponivel}</td>
+            {/* Lista de Projetos com Cores */}
+            <div className="bg-nexus-800 rounded-2xl border border-nexus-700 overflow-hidden shadow-2xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-nexus-900 text-nexus-400 uppercase font-black text-[10px] tracking-widest">
+                            <tr>
+                                <th className="px-6 py-5">Título do Projeto</th>
+                                <th className="px-6 py-5">Nº / Centro de Controle</th>
+                                <th className="px-6 py-5">Criticidade</th>
+                                <th className="px-6 py-5">A Comprar</th>
+                                <th className="px-6 py-5">Data Disponível</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-nexus-700">
+                            {buyingData?.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-nexus-500 italic">
+                                        Nenhum dado importado. Por favor, carregue o arquivo CSV de compras.
+                                    </td>
+                                </tr>
+                            ) : (
+                                buyingData.map((item) => {
+                                    const isCritico = item.status === 'Crítico';
+                                    const isIntermediario = item.status === 'Intermediário';
+                                    
+                                    const rowStyle = isCritico 
+                                        ? 'text-red-400 hover:bg-red-500/10 cursor-pointer border-l-4 border-red-500' 
+                                        : isIntermediario 
+                                        ? 'text-yellow-400 hover:bg-yellow-500/5 border-l-4 border-yellow-500' 
+                                        : 'text-green-400 hover:bg-green-500/5 border-l-4 border-green-500';
+
+                                    const badgeStyle = isCritico
+                                        ? 'bg-red-500 text-white'
+                                        : isIntermediario
+                                        ? 'bg-yellow-500 text-black'
+                                        : 'bg-green-500 text-white';
+
+                                    return (
+                                        <tr 
+                                            key={item.id} 
+                                            className={`transition-all ${rowStyle}`}
+                                            onClick={() => isCritico && setSelectedProject(item)}
+                                        >
+                                            <td className="px-6 py-5 font-bold flex items-center gap-2">
+                                                {item.projeto}
+                                                {isCritico && <Eye size={14} className="opacity-50" />}
+                                            </td>
+                                            <td className="px-6 py-5 font-mono text-xs opacity-80">{item.numeroProjeto}</td>
+                                            <td className="px-6 py-5">
+                                                <span className={`px-2.5 py-1 rounded text-[9px] font-black uppercase shadow-sm ${badgeStyle}`}>
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-5 text-nexus-200">{item.aComprar}</td>
+                                            <td className="px-6 py-5 font-bold">{item.dataDisponivel}</td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            {/* Modal de Detalhes para Críticos */}
+            {selectedProject && (
+                <DetailModal project={selectedProject} onClose={() => setSelectedProject(null)} />
+            )}
         </div>
     );
 };
@@ -188,23 +315,29 @@ export const StockManager: React.FC = () => {
     <div className="flex flex-col h-full space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Estoque & Compras</h2>
-          <p className="text-nexus-400">Dados persistidos no Supabase</p>
+          <h2 className="text-2xl font-bold text-white">Gestão de Estoque & Compras</h2>
+          <p className="text-nexus-400 text-sm">Controle de insumos e criticidade de aquisições</p>
         </div>
-        <div className="flex bg-nexus-800 p-1 rounded-lg border border-nexus-700">
+        <div className="flex bg-nexus-800 p-1.5 rounded-xl border border-nexus-700 shadow-xl">
             {['status', 'monitor', 'control'].map(tab => (
                 <button
                     key={tab}
                     onClick={() => setActiveTab(tab as any)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-nexus-400 hover:text-white'}`}
+                    className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-500 hover:text-white'}`}
                 >
-                    {tab === 'status' ? 'Status' : tab === 'monitor' ? 'SLA' : 'Fases'}
+                    {tab === 'status' ? 'Status Compras' : tab === 'monitor' ? 'SLA Triagem' : 'Fases de Obra'}
                 </button>
             ))}
         </div>
       </div>
       <div className="flex-1 min-h-0">
           {activeTab === 'status' && <ProjectBuyingStatusView />}
+          {activeTab !== 'status' && (
+              <div className="flex flex-col items-center justify-center h-64 bg-nexus-800/30 rounded-2xl border-2 border-dashed border-nexus-700">
+                  <Clock size={48} className="text-nexus-600 mb-3" />
+                  <p className="text-nexus-500 font-medium">Módulo em desenvolvimento</p>
+              </div>
+          )}
       </div>
     </div>
   );
