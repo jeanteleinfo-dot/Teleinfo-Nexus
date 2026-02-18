@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, UserRole } from '../types';
 import { supabase } from '../services/supabase';
 
@@ -21,9 +21,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfiles = async () => {
+  const fetchProfiles = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*');
+      const { data, error } = await supabase.from('profiles').select('*').timeout(3000);
       if (!error && data) {
         setUsers(data.map(p => ({
           id: p.id,
@@ -35,11 +35,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })));
       }
     } catch (e) {
-      console.error("Error fetching profiles:", e);
+      console.warn("Profiles fetch non-critical failure.");
     }
-  };
+  }, []);
 
-  const mapSupabaseUserToNexus = async (sbUser: any) => {
+  const mapUser = useCallback(async (sbUser: any) => {
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -47,15 +47,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', sbUser.id)
         .maybeSingle();
 
-      const nexusUser: User = {
+      setUser({
         id: sbUser.id,
         username: profile?.username || sbUser.email?.split('@')[0] || 'usuario',
         name: profile?.name || sbUser.user_metadata?.full_name || 'Usuário Nexus',
         email: sbUser.email,
         role: (profile?.role as UserRole) || UserRole.USER,
         avatar: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(sbUser.email)}&background=3b82f6&color=fff`
-      };
-      setUser(nexusUser);
+      });
     } catch (e) {
       setUser({
         id: sbUser.id,
@@ -66,62 +65,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(sbUser.email)}&background=3b82f6&color=fff`
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-      // Timeout de segurança para não travar a tela de loading infinitamente
-      const timeout = setTimeout(() => {
+    const checkSession = async () => {
+      // Timeout agressivo de 3s para liberar a tela inicial
+      const timer = setTimeout(() => {
         if (mounted && loading) setLoading(false);
-      }, 5000);
+      }, 3000);
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && mounted) {
-          await mapSupabaseUserToNexus(session.user);
+          await mapUser(session.user);
           await fetchProfiles();
         }
       } catch (e) {
-        console.error("Auth init error:", e);
+        console.error("Auth session check failed");
       } finally {
-        clearTimeout(timeout);
+        clearTimeout(timer);
         if (mounted) setLoading(false);
       }
     };
 
-    initAuth();
+    checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (session?.user) {
-          await mapSupabaseUserToNexus(session.user);
-          await fetchProfiles();
-        } else {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        await mapUser(session.user);
+        await fetchProfiles();
+      } else {
+        setUser(null);
       }
+      if (mounted) setLoading(false);
     });
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchProfiles, mapUser]);
 
   const login = async (email: string, passwordInput: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password: passwordInput,
-      });
+      // Adiciona timeout para a requisição de login
+      const { data, error } = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password: passwordInput }),
+        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Tempo de resposta excedido (Timeout)')), 8000))
+      ]);
+      
       if (error) throw error;
       return { success: true };
     } catch (error: any) {
-      return { success: false, error: error.message };
+      return { success: false, error: error.message || 'Erro inesperado no servidor.' };
     }
   };
 
@@ -134,18 +132,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addUser = async (userData: any) => {
-    const { error } = await supabase.from('profiles').insert([{
+    await supabase.from('profiles').insert([{
       name: userData.name,
       username: userData.username,
       email: userData.email,
       role: userData.role
     }]);
-    if (!error) fetchProfiles();
+    fetchProfiles();
   };
 
   const deleteUser = async (id: string) => {
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (!error) fetchProfiles();
+    await supabase.from('profiles').delete().eq('id', id);
+    fetchProfiles();
   };
 
   return (

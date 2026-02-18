@@ -4,12 +4,20 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = 'https://cktbrxwgqrtgvrbxuqzs.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_NHVjMcerDg4-2vzNpK-r9A_VjtgB5GQ';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Cliente configurado com opções de timeout globais se suportado ou via fetch custom
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  },
+  global: {
+    headers: { 'x-nexus-client': 'teleinfo-platform' }
+  }
+});
 
 /**
  * Função utilitária para sincronizar dados locais com o Supabase
- * @param tableName Nome da tabela no Supabase
- * @param data Array de objetos para salvar
  */
 export const syncToSupabase = async (tableName: string, data: any[]) => {
   try {
@@ -18,25 +26,25 @@ export const syncToSupabase = async (tableName: string, data: any[]) => {
       .upsert(data, { onConflict: 'id' });
     
     if (error) throw error;
-    console.log(`Sincronizado com ${tableName}`);
   } catch (err) {
-    console.error(`Erro ao sincronizar ${tableName}:`, err);
+    console.error(`Sincronização ${tableName} falhou.`);
   }
 };
 
 /**
- * Busca dados de uma tabela do Supabase
+ * Busca dados de uma tabela do Supabase com tratamento de erro
  */
 export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | null> => {
   try {
     const { data, error } = await supabase
       .from(tableName)
-      .select('*');
+      .select('*')
+      .order('id', { ascending: true });
     
     if (error) throw error;
     return data as T[];
   } catch (err) {
-    console.error(`Erro ao buscar de ${tableName}:`, err);
+    console.warn(`Busca em ${tableName} indisponível.`);
     return null;
   }
 };

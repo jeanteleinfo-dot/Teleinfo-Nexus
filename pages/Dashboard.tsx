@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { TeleinfoReport } from '../modules/TeleinfoReport';
 import { StockManager } from '../modules/StockManager';
@@ -8,7 +8,7 @@ import { UserManagement } from '../modules/UserManagement';
 import { AppModule, UserRole, DetailedProject, ProjectBuyingStatus } from '../types';
 import { 
   Menu, Zap, ShieldCheck, Target, Layers, ShoppingCart, Activity, AlertTriangle, 
-  Clock, TrendingUp, Timer, ChevronRight 
+  Clock, TrendingUp, Timer, ChevronRight, Loader2, RefreshCw 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { fetchFromSupabase } from '../services/supabase';
@@ -40,14 +40,16 @@ interface LandingDashboardProps {
 }
 
 const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, generalProjects, buyingStatus, detailedAudits }) => {
-  // Memolized metrics
   const projectStats = useMemo(() => {
     const total = generalProjects.length;
-    const avg = total > 0 ? (generalProjects.reduce((acc, p) => acc + (p.perc || 0), 0) / total).toFixed(0) : 0;
-    const notStarted = generalProjects.filter(p => {
+    let totalPerc = 0;
+    let notStarted = 0;
+    generalProjects.forEach(p => {
+      totalPerc += (p.perc || 0);
       const s = p.status?.toUpperCase() || '';
-      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO");
-    }).length;
+      if (s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO")) notStarted++;
+    });
+    const avg = total > 0 ? (totalPerc / total).toFixed(0) : 0;
     return { total, avg, notStarted };
   }, [generalProjects]);
 
@@ -58,20 +60,21 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
   }, [buyingStatus]);
 
   const auditStats = useMemo(() => {
-    const totalSold = detailedAudits.reduce((acc, p) => acc + (p.soldHours?.infra || 0) + (p.soldHours?.sse || 0) + (p.soldHours?.ti || 0), 0);
-    const totalUsed = detailedAudits.reduce((acc, p) => acc + (p.usedHours?.infra || 0) + (p.usedHours?.sse || 0) + (p.usedHours?.ti || 0), 0);
-    const criticalHH = detailedAudits.filter(p => {
+    let totalSold = 0;
+    let totalUsed = 0;
+    let criticalHH = 0;
+    detailedAudits.forEach(p => {
       const sold = (p.soldHours?.infra || 0) + (p.soldHours?.sse || 0) + (p.soldHours?.ti || 0);
       const used = (p.usedHours?.infra || 0) + (p.usedHours?.sse || 0) + (p.usedHours?.ti || 0);
-      return sold > 0 && used > sold;
-    }).length;
+      totalSold += sold;
+      totalUsed += used;
+      if (sold > 0 && used > sold) criticalHH++;
+    });
     return { totalSold, totalUsed, criticalHH };
   }, [detailedAudits]);
 
   return (
     <div className="space-y-10 animate-fadeIn pb-20">
-      
-      {/* SECTION 1: VISÃO GERAL DE PROJETOS */}
       <section className="space-y-6">
         <div className="flex justify-between items-end">
           <div>
@@ -84,7 +87,6 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
             Ver Relatório Completo <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <SummaryCard title="Projetos Mapeados" value={projectStats.total} subValue="Ativos" icon={Layers} color="bg-blue-600" />
           <SummaryCard title="Conclusão Média" value={`${projectStats.avg}%`} subValue="Global" icon={Target} color="bg-purple-600" />
@@ -92,7 +94,6 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
         </div>
       </section>
 
-      {/* SECTION 2: STATUS DE COMPRAS */}
       <section className="space-y-6">
         <div className="flex justify-between items-end">
           <div>
@@ -105,7 +106,6 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
             Ver Gestão de Compras <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
-
         <div className="bg-nexus-800 rounded-2xl border border-nexus-700 p-6 flex flex-col md:flex-row items-center gap-10">
           <div className="flex-1 space-y-4 w-full">
             <div className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
@@ -121,117 +121,81 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
             <div className="grid grid-cols-2 gap-4">
                <div className="bg-nexus-900/50 p-4 rounded-xl border border-nexus-700">
                   <p className="text-2xl font-black text-white">{buyingStats.total}</p>
-                  <p className="text-nexus-500 text-[9px] font-black uppercase">Total de Itens Monitorados</p>
+                  <p className="text-nexus-500 text-[9px] font-black uppercase">Total Monitorado</p>
                </div>
                <div className="bg-nexus-900/50 p-4 rounded-xl border border-nexus-700">
-                  <p className="text-2xl font-black text-green-500">{buyingStats.total - buyingStats.critical}</p>
-                  <p className="text-nexus-500 text-[9px] font-black uppercase">Em Fluxo Normal</p>
+                  <p className="text-2xl font-black text-green-500">{Math.max(0, buyingStats.total - buyingStats.critical)}</p>
+                  <p className="text-nexus-500 text-[9px] font-black uppercase">Status Normal</p>
                </div>
             </div>
           </div>
-          <div className="h-40 w-40 shrink-0">
+          <div className="h-40 w-40 shrink-0 flex items-center justify-center relative">
              <ResponsiveContainer width="100%" height="100%">
                <PieChart>
                   <Pie
-                    data={[
-                      { name: 'Crítico', value: buyingStats.critical },
-                      { name: 'OK', value: Math.max(0, buyingStats.total - buyingStats.critical) }
-                    ]}
-                    innerRadius={45}
-                    outerRadius={65}
-                    paddingAngle={5}
-                    dataKey="value"
+                    data={[{ name: 'C', value: buyingStats.critical }, { name: 'O', value: Math.max(1, buyingStats.total - buyingStats.critical) }]}
+                    innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="value" stroke="none"
                   >
-                    <Cell fill="#ef4444" stroke="none" />
-                    <Cell fill="#1e293b" stroke="#334155" />
+                    <Cell fill="#ef4444" />
+                    <Cell fill="#1e293b" />
                   </Pie>
                </PieChart>
              </ResponsiveContainer>
-             <div className="text-center -mt-24">
-               <p className="text-xl font-black text-white">{buyingStats.total > 0 ? ((buyingStats.critical / buyingStats.total) * 100).toFixed(0) : 0}%</p>
+             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+               <p className="text-xl font-black text-white leading-none">{buyingStats.total > 0 ? ((buyingStats.critical / buyingStats.total) * 100).toFixed(0) : 0}%</p>
                <p className="text-[8px] text-nexus-500 font-black uppercase">Críticos</p>
              </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 3: AUDITORIA DETALHADA */}
       <section className="space-y-6">
         <div className="flex justify-between items-end">
           <div>
             <h2 className="text-2xl font-black text-white flex items-center gap-3">
               <Activity className="text-green-400" /> Auditoria Detalhada
             </h2>
-            <p className="text-nexus-400 text-sm">Acompanhamento de H/H (Hora-Homem) por obra</p>
+            <p className="text-nexus-400 text-sm">Acompanhamento de H/H por obra</p>
           </div>
           <button onClick={() => onNavigate(AppModule.TELEINFO_REPORT)} className="text-blue-400 hover:text-blue-300 text-xs font-black uppercase flex items-center gap-1 group">
             Abrir Auditoria <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-nexus-800 p-6 rounded-2xl border border-nexus-700">
-            <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Timer size={14} className="text-blue-400" /> Consumo de Horas (Vendido x Utilizado)
-            </h4>
+            <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-6 flex items-center gap-2">Consumo de Horas Global</h4>
             <div className="flex items-center gap-8">
               <div className="flex-1 space-y-4">
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-black text-nexus-500 uppercase">
-                    <span>Vendido</span>
-                    <span className="text-white">{auditStats.totalSold}h</span>
-                  </div>
-                  <div className="w-full bg-nexus-900 h-2 rounded-full overflow-hidden">
-                    <div className="h-full bg-nexus-700" style={{ width: '100%' }} />
-                  </div>
+                  <div className="flex justify-between text-[10px] font-black text-nexus-500 uppercase"><span>Vendido</span><span className="text-white">{auditStats.totalSold}h</span></div>
+                  <div className="w-full bg-nexus-900 h-2 rounded-full overflow-hidden"><div className="h-full bg-nexus-700 w-full" /></div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-black text-nexus-500 uppercase">
-                    <span>Utilizado</span>
-                    <span className={auditStats.totalUsed > auditStats.totalSold ? 'text-red-400' : 'text-green-400'}>{auditStats.totalUsed}h</span>
-                  </div>
+                  <div className="flex justify-between text-[10px] font-black text-nexus-500 uppercase"><span>Utilizado</span><span className={auditStats.totalUsed > auditStats.totalSold ? 'text-red-400' : 'text-green-400'}>{auditStats.totalUsed}h</span></div>
                   <div className="w-full bg-nexus-900 h-2 rounded-full overflow-hidden">
-                    <div className={`h-full ${auditStats.totalUsed > auditStats.totalSold ? 'bg-red-500' : 'bg-green-500'}`} 
-                         style={{ width: `${Math.min(100, auditStats.totalSold > 0 ? (auditStats.totalUsed / auditStats.totalSold) * 100 : 0)}%` }} />
+                    <div className={`h-full ${auditStats.totalUsed > auditStats.totalSold ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, auditStats.totalSold > 0 ? (auditStats.totalUsed/auditStats.totalSold)*100 : 0)}%` }} />
                   </div>
                 </div>
               </div>
-              <div className="text-center p-4 bg-nexus-900/50 rounded-2xl border border-nexus-700 min-w-[100px]">
-                <p className="text-2xl font-black text-white">{auditStats.totalSold > 0 ? ((auditStats.totalUsed / auditStats.totalSold) * 100).toFixed(1) : 0}%</p>
-                <p className="text-[8px] text-nexus-500 font-black uppercase">Utilização</p>
-              </div>
             </div>
-            {auditStats.criticalHH > 0 && (
-              <div className="mt-6 flex items-center gap-2 text-xs font-black text-red-400 bg-red-400/10 p-2 rounded-lg">
-                <AlertTriangle size={14} /> {auditStats.criticalHH} Obras com orçamento de horas estourado!
-              </div>
-            )}
           </div>
-
           <div className="bg-nexus-800 p-6 rounded-2xl border border-nexus-700">
-             <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-4">Últimas Auditorias Ativas</h4>
+             <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-4">Projetos em Auditoria</h4>
              <div className="space-y-3">
-               {detailedAudits.slice(0, 4).map(p => (
-                 <div key={p.id} className="flex items-center justify-between p-3 bg-nexus-900/50 rounded-xl border border-nexus-700 hover:bg-nexus-700/20 transition-all cursor-pointer">
-                    <div className="flex items-center gap-3">
-                       <div className="w-1.5 h-6 rounded-full bg-blue-500" />
-                       <div>
-                          <p className="text-xs font-bold text-white uppercase">{p.name}</p>
-                          <p className="text-[9px] text-nexus-500 uppercase">CC: {p.costCenter}</p>
-                       </div>
+               {detailedAudits.slice(0, 3).map(p => (
+                 <div key={p.id} className="flex items-center justify-between p-3 bg-nexus-900/50 rounded-xl border border-nexus-700">
+                    <div>
+                       <p className="text-xs font-bold text-white uppercase">{p.name}</p>
+                       <p className="text-[9px] text-nexus-500 uppercase">CC: {p.costCenter}</p>
                     </div>
-                    <div className="text-right">
-                       <p className="text-xs font-black text-white">{p.steps.length > 0 ? (p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length).toFixed(0) : 0}%</p>
-                       <p className="text-[8px] text-nexus-500 font-black uppercase">Progresso</p>
-                    </div>
+                    <span className="text-xs font-black text-white">{p.steps.length > 0 ? (p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length).toFixed(0) : 0}%</span>
                  </div>
                ))}
-               {detailedAudits.length === 0 && <p className="text-nexus-600 italic text-xs py-8 text-center">Nenhuma auditoria cadastrada.</p>}
+               {detailedAudits.length === 0 && <p className="text-nexus-600 italic text-xs py-4 text-center">Nenhuma auditoria cadastrada.</p>}
              </div>
           </div>
         </div>
       </section>
-
     </div>
   );
 };
@@ -241,72 +205,80 @@ export const Dashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user } = useAuth();
 
-  // Lifted state for the landing dashboard to avoid re-fetching on every tab switch
   const [generalProjects, setGeneralProjects] = useState<any[]>([]);
   const [buyingStatus, setBuyingStatus] = useState<ProjectBuyingStatus[]>([]);
   const [detailedAudits, setDetailedAudits] = useState<DetailedProject[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        const [gp, bs, da] = await Promise.all([
+  const loadData = useCallback(async () => {
+    setDataLoading(true);
+    setError(false);
+    try {
+      // Adicionado timeout para evitar hang infinito
+      const results = await Promise.race([
+        Promise.all([
           fetchFromSupabase<any>('general_projects'),
           fetchFromSupabase<ProjectBuyingStatus>('buying_status'),
           fetchFromSupabase<DetailedProject>('detailed_projects')
-        ]);
-        if (gp) setGeneralProjects(gp);
-        if (bs) setBuyingStatus(bs);
-        if (da) setDetailedAudits(da);
-      } finally {
-        setDataLoading(false);
-      }
-    };
-    loadDashboardData();
+        ]),
+        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+      ]);
+      
+      const [gp, bs, da] = results;
+      if (gp) setGeneralProjects(gp);
+      if (bs) setBuyingStatus(bs);
+      if (da) setDetailedAudits(da);
+    } catch (err) {
+      console.warn("Data load failure, using empty state.");
+      setError(true);
+    } finally {
+      setDataLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const renderModule = () => {
     switch (currentModule) {
-      case AppModule.TELEINFO_REPORT:
-        return <TeleinfoReport />;
-      case AppModule.STOCK_MONITOR:
-        return <StockManager />;
-      case AppModule.TELEINFO_MANAGER:
-        return <TeleinfoManager />;
-      case AppModule.USER_MANAGEMENT:
-        return <UserManagement />;
+      case AppModule.TELEINFO_REPORT: return <TeleinfoReport />;
+      case AppModule.STOCK_MONITOR: return <StockManager />;
+      case AppModule.TELEINFO_MANAGER: return <TeleinfoManager />;
+      case AppModule.USER_MANAGEMENT: return <UserManagement />;
       case AppModule.DASHBOARD:
       default:
         if (dataLoading) {
             return (
               <div className="flex flex-col items-center justify-center h-96 space-y-4">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-nexus-400 font-bold animate-pulse uppercase text-xs tracking-widest">Sincronizando Plataforma Nexus...</p>
+                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+                <p className="text-nexus-400 font-bold uppercase text-[10px] tracking-widest animate-pulse">Sincronizando Plataforma Nexus...</p>
               </div>
             );
         }
         return (
-          <div className="space-y-6 animate-fadeIn">
+          <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-3xl font-black text-white">Dashboard Nexus</h2>
-                <p className="text-nexus-400 text-sm">Bem-vindo à central de inteligência Teleinfo.</p>
+                <h2 className="text-3xl font-black text-white tracking-tighter">Dashboard Nexus</h2>
+                <p className="text-nexus-400 text-sm">Central de inteligência operacional Teleinfo.</p>
               </div>
               <div className="hidden md:flex items-center gap-4 p-2 bg-nexus-800 rounded-2xl border border-nexus-700">
                 <div className="text-right">
-                  <p className="text-[10px] font-black text-nexus-500 uppercase leading-none">Status Conexão</p>
-                  <p className="text-green-500 text-xs font-black">Supabase Cloud On</p>
+                  <p className="text-[10px] font-black text-nexus-500 uppercase">Sincronização</p>
+                  <p className={error ? "text-red-500 text-xs font-black" : "text-green-500 text-xs font-black"}>
+                    {error ? "Falha de Conexão" : "Cloud Online"}
+                  </p>
                 </div>
-                <div className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_#10b981]" />
+                {error ? (
+                  <button onClick={loadData} className="p-1.5 bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500/30 transition-all"><RefreshCw size={16}/></button>
+                ) : (
+                  <div className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_#10b981]" />
+                )}
               </div>
             </div>
-            
-            <LandingDashboard 
-              onNavigate={setCurrentModule} 
-              generalProjects={generalProjects}
-              buyingStatus={buyingStatus}
-              detailedAudits={detailedAudits}
-            />
+            <LandingDashboard onNavigate={setCurrentModule} generalProjects={generalProjects} buyingStatus={buyingStatus} detailedAudits={detailedAudits} />
           </div>
         );
     }
@@ -314,45 +286,21 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-nexus-900 overflow-hidden">
-      {/* Mobile Backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      <Sidebar 
-        currentModule={currentModule} 
-        onNavigate={(mod) => {
-          setCurrentModule(mod);
-          if (window.innerWidth < 768) setSidebarOpen(false);
-        }}
-        isOpen={sidebarOpen}
-      />
-
+      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm transition-all" onClick={() => setSidebarOpen(false)} />}
+      <Sidebar currentModule={currentModule} onNavigate={(mod) => { setCurrentModule(mod); if (window.innerWidth < 768) setSidebarOpen(false); }} isOpen={sidebarOpen} />
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-        <header className="h-16 flex items-center justify-between px-4 border-b border-nexus-700 bg-nexus-900/90 backdrop-blur shrink-0 z-20">
-          <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 text-nexus-400 hover:bg-nexus-800 rounded-lg transition-colors"
-          >
-            <Menu size={24} />
-          </button>
-          
+        <header className="h-16 flex items-center justify-between px-6 border-b border-nexus-700 bg-nexus-900/95 backdrop-blur shrink-0 z-20">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-nexus-400 hover:bg-nexus-800 rounded-xl transition-all"><Menu size={24} /></button>
           <div className="flex items-center gap-4">
-            <div className="flex flex-col items-end mr-2">
-              <span className="text-xs font-bold text-white truncate max-w-[120px]">{user?.name}</span>
-              <span className="text-[10px] text-nexus-500 font-black uppercase">{user?.role}</span>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-white">{user?.name}</p>
+              <p className="text-[9px] text-nexus-500 font-black uppercase tracking-widest">{user?.role}</p>
             </div>
-            <img src={user?.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-nexus-600 shadow-lg shrink-0" />
+            <img src={user?.avatar} alt="P" className="w-9 h-9 rounded-full border border-nexus-600 shadow-xl" />
           </div>
         </header>
-
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 relative custom-scrollbar">
-          <div className="max-w-7xl mx-auto">
-            {renderModule()}
-          </div>
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 relative custom-scrollbar bg-nexus-900">
+          <div className="max-w-7xl mx-auto">{renderModule()}</div>
         </main>
       </div>
     </div>
