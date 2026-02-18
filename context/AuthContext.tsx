@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: p.name,
           email: p.email,
           role: p.role as UserRole,
-          avatar: p.avatar_url || `https://ui-avatars.com/api/?name=${p.name}&background=3b82f6&color=fff`
+          avatar: p.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=3b82f6&color=fff`
         })));
       }
     } catch (e) {
@@ -41,8 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const mapSupabaseUserToNexus = async (sbUser: any) => {
     try {
-      // Usamos maybeSingle para não quebrar o fluxo caso o perfil não exista
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', sbUser.id)
@@ -54,40 +53,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: profile?.name || sbUser.user_metadata?.full_name || 'Usuário Nexus',
         email: sbUser.email,
         role: (profile?.role as UserRole) || UserRole.USER,
-        avatar: profile?.avatar_url || `https://ui-avatars.com/api/?name=${sbUser.email}&background=3b82f6&color=fff`
+        avatar: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(sbUser.email)}&background=3b82f6&color=fff`
       };
       setUser(nexusUser);
     } catch (e) {
-      console.error("Critical error mapping user:", e);
-      // Fallback para permitir login mesmo com erro de perfil
+      console.warn("User mapping error (using fallback):", e);
       setUser({
         id: sbUser.id,
         username: sbUser.email?.split('@')[0] || 'usuario',
         name: 'Usuário Nexus',
         email: sbUser.email,
         role: UserRole.USER,
-        avatar: `https://ui-avatars.com/api/?name=${sbUser.email}&background=3b82f6&color=fff`
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(sbUser.email)}&background=3b82f6&color=fff`
       });
     }
   };
 
   useEffect(() => {
-    const checkSession = async () => {
-      setLoading(true);
+    let mounted = true;
+
+    const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        if (session?.user && mounted) {
           await mapSupabaseUserToNexus(session.user);
           await fetchProfiles();
         }
       } catch (e) {
-        console.error("Session check error:", e);
+        console.error("Auth init error:", e);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
-    checkSession();
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
@@ -96,10 +95,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, passwordInput: string) => {
@@ -108,12 +110,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password: passwordInput,
       });
-
       if (error) throw error;
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
   };
 
   const addUser = async (userData: any) => {
@@ -129,11 +135,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteUser = async (id: string) => {
     const { error } = await supabase.from('profiles').delete().eq('id', id);
     if (!error) fetchProfiles();
-  };
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
   };
 
   return (

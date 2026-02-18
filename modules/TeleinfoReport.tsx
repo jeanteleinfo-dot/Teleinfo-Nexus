@@ -635,14 +635,22 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
     const stats = useMemo(() => {
         const total = generalProjects.length;
-        const avg = total > 0 ? (generalProjects.reduce((acc, p) => acc + (p.perc || 0), 0) / total).toFixed(0) : 0;
-        const notStarted = generalProjects.filter(p => p.status?.toUpperCase().includes('NAO INICIADO')).length;
-        
+        let totalPerc = 0;
+        let naoIniciados = 0;
         const statusCounts: Record<string, number> = {};
-        generalProjects.forEach(p => { 
-            const s = p.status || 'OUTROS';
-            statusCounts[s] = (statusCounts[s] || 0) + 1;
+
+        generalProjects.forEach(p => {
+            const sRaw = p.status?.trim() || 'NÃO DEFINIDO';
+            const sUpper = sRaw.toUpperCase();
+            statusCounts[sRaw] = (statusCounts[sRaw] || 0) + 1;
+            totalPerc += (p.perc || 0);
+            
+            // Lógica de normalização igual à da Visão Geral
+            const isNaoIniciado = sUpper.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO");
+            if (isNaoIniciado) naoIniciados++;
         });
+
+        const avg = total > 0 ? (totalPerc / total).toFixed(1) : 0;
 
         const buCounts: Record<string, number> = {};
         generalProjects.forEach(p => { buCounts[p.bus || 'OUTROS'] = (buCounts[p.bus || 'OUTROS'] || 0) + 1; });
@@ -650,7 +658,7 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         const criticalBuys = buyingStatus.filter(b => b.status === 'Crítico');
 
-        return { total, avg, notStarted, statusCounts, buData, criticalBuys };
+        return { total, avg, notStarted: naoIniciados, statusCounts, buData, criticalBuys };
     }, [generalProjects, buyingStatus]);
 
     const renderSlide = () => {
@@ -674,23 +682,28 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                 <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
                     <h2 className="text-4xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Portfólio Completo</h2>
                     <div className="grid grid-cols-3 gap-8">
-                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700">
+                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
                             <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Total de Projetos</p>
                             <h3 className="text-7xl font-black text-white">{stats.total}</h3>
                         </div>
-                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700">
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Média Conclusão</p>
+                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Finalização Global</p>
                             <h3 className="text-7xl font-black text-blue-500">{stats.avg}%</h3>
                         </div>
-                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700">
+                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
                             <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Não Iniciados</p>
                             <h3 className="text-7xl font-black text-orange-500">{stats.notStarted}</h3>
                         </div>
                     </div>
                     <div className="grid grid-cols-4 gap-4 mt-6">
-                        {Object.entries(stats.statusCounts).slice(0, 4).map(([status, count]) => (
+                        {Object.entries(stats.statusCounts)
+                          .filter(([status]) => {
+                              const s = status.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                              return !s.includes('NAO INICIADO');
+                          })
+                          .slice(0, 4).map(([status, count]) => (
                             <div key={status} className="bg-nexus-900 p-4 rounded-xl border border-nexus-800">
-                                <p className="text-[10px] font-black text-nexus-500 uppercase truncate">{status}</p>
+                                <p className="text-[10px] font-black text-nexus-500 uppercase truncate" title={status}>{status}</p>
                                 <p className="text-2xl font-black text-white">{count}</p>
                             </div>
                         ))}
@@ -820,13 +833,13 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                         </h4>
                         <div className="h-[280px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={project.steps} margin={{ top: 30, right: 30, left: 20, bottom: 20 }}>
+                                <BarChart data={project.steps} margin={{ top: 35, right: 30, left: 20, bottom: 20 }}>
                                     <XAxis dataKey="name" stroke="#64748b" fontSize={11} fontWeight="bold" />
-                                    {/* Ajustado domínio do Y para dar espaço ao rótulo de 100% */}
-                                    <YAxis domain={[0, 115]} hide />
+                                    {/* Ajustado domínio do Y para dar espaço ao rótulo de 100% (Agora com 120 para garantir) */}
+                                    <YAxis domain={[0, 120]} hide />
                                     <Bar dataKey="perc" radius={[8, 8, 0, 0]} barSize={50}>
                                         {project.steps.map((_, i) => <Cell key={i} fill={getBuColor(project.bu || '')} />)}
-                                        <LabelList dataKey="perc" position="top" fill="#fff" fontSize={14} fontWeight="black" formatter={(v:number) => `${v}%`} />
+                                        <LabelList dataKey="perc" position="top" fill="#fff" fontSize={16} fontWeight="black" formatter={(v:number) => `${v}%`} offset={10} />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
@@ -840,7 +853,7 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         if (currentSlide === slidesCount - 1) {
             return (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-12 animate-fadeIn">
-                    <div className="w-32 h-32 bg-blue-600 rounded-[40px] flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.3)] animate-bounce">
+                    <div className="w-32 h-32 bg-blue-600 rounded-[40px] flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.3)]">
                         <span className="text-7xl font-black text-white italic">N</span>
                     </div>
                     <div className="space-y-4">
@@ -855,7 +868,6 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                              </div>
                         </div>
                     </div>
-                    <div className="h-px w-64 bg-gradient-to-r from-transparent via-nexus-700 to-transparent" />
                 </div>
             );
         }
@@ -880,10 +892,6 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                 >
                     <Maximize2 size={18} /> Iniciar Apresentação Executiva
                 </button>
-                <div className="flex gap-4 text-[10px] text-nexus-500 font-black uppercase tracking-tighter opacity-50">
-                   <span className="flex items-center gap-1"><KeyboardArrowIcon /> Navegar</span>
-                   <span className="flex items-center gap-1"><EscapeIcon /> Sair</span>
-                </div>
             </div>
 
             {/* FULL SCREEN OVERLAY */}
@@ -905,56 +913,44 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                         </div>
                     </div>
 
-                    {/* Detail Modal Overlay within Presentation */}
+                    {/* Modal Detalhes Compras */}
                     {selectedBuyingDetail && (
                         <div className="fixed inset-0 bg-black/90 z-[1010] flex items-center justify-center p-8 backdrop-blur-xl animate-fadeIn" onClick={() => setSelectedBuyingDetail(null)}>
                             <div className="bg-nexus-800 border-2 border-red-500/50 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                                <div className="bg-red-600 p-6 flex justify-between items-center">
-                                    <div className="flex items-center gap-3 text-white">
+                                <div className="bg-red-600 p-6 flex justify-between items-center text-white">
+                                    <div className="flex items-center gap-3">
                                         <AlertTriangle size={32} />
                                         <div>
                                             <h3 className="font-black text-2xl uppercase italic">Analise de Criticidade</h3>
                                             <p className="text-xs font-bold text-white/70 uppercase">Detalhes da Cadeia de Suprimentos</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => setSelectedBuyingDetail(null)} className="text-white hover:bg-white/10 p-2 rounded-full transition-colors"><X size={32}/></button>
+                                    <button onClick={() => setSelectedBuyingDetail(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={32}/></button>
                                 </div>
-                                <div className="p-10 space-y-8">
-                                    <div className="grid grid-cols-2 gap-8">
-                                        <div className="col-span-2">
-                                            <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Projeto</label>
-                                            <h4 className="text-3xl font-black text-white mt-1">{selectedBuyingDetail.projeto}</h4>
-                                            <p className="text-nexus-400 font-mono text-lg mt-1 tracking-tighter">ID: {selectedBuyingDetail.numeroProjeto}</p>
+                                <div className="p-10 space-y-6">
+                                    <div>
+                                        <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Projeto</label>
+                                        <h4 className="text-3xl font-black text-white mt-1">{selectedBuyingDetail.projeto}</h4>
+                                        <p className="text-nexus-400 font-mono text-lg tracking-tighter">ID: {selectedBuyingDetail.numeroProjeto}</p>
+                                    </div>
+                                    <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
+                                        <label className="text-xs font-black text-red-500 uppercase flex items-center gap-2"><ShoppingCart size={14} /> Materiais a Comprar</label>
+                                        <p className="text-white text-xl mt-3 font-medium">{selectedBuyingDetail.aComprar}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="bg-nexus-900 p-4 rounded-xl border border-nexus-700">
+                                            <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Comprados</label>
+                                            <p className="text-nexus-300 text-lg font-bold">{selectedBuyingDetail.comprados}</p>
+                                        </div>
+                                        <div className="bg-nexus-900 p-4 rounded-xl border border-nexus-700">
+                                            <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Entregues</label>
+                                            <p className="text-nexus-300 text-lg font-bold">{selectedBuyingDetail.entregue}</p>
                                         </div>
                                     </div>
-                                    <div className="space-y-6">
-                                        <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
-                                            <label className="text-xs font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
-                                                <ShoppingCart size={14} /> Materiais a Comprar (Pendentes)
-                                            </label>
-                                            <p className="text-white text-xl mt-3 leading-relaxed font-medium">{selectedBuyingDetail.aComprar}</p>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
-                                                <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Já Adquiridos</label>
-                                                <p className="text-nexus-300 text-lg mt-2 font-bold">{selectedBuyingDetail.comprados}</p>
-                                            </div>
-                                            <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
-                                                <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Entregues</label>
-                                                <p className="text-nexus-300 text-lg mt-2 font-bold">{selectedBuyingDetail.entregue}</p>
-                                            </div>
-                                        </div>
-                                        <div className="bg-blue-600/20 p-8 rounded-2xl border border-blue-500/30 flex justify-between items-center">
-                                            <div>
-                                                <label className="text-xs font-black text-blue-400 uppercase tracking-widest">Data Disponível p/ Obra</label>
-                                                <p className="text-white text-3xl font-black italic mt-1">{selectedBuyingDetail.dataDisponivel}</p>
-                                            </div>
-                                            <Clock size={48} className="text-blue-500 opacity-30" />
-                                        </div>
+                                    <div className="bg-blue-600/10 p-6 rounded-xl border border-blue-500/20">
+                                        <label className="text-xs font-black text-blue-400 uppercase">Data Disponível</label>
+                                        <p className="text-white text-3xl font-black italic">{selectedBuyingDetail.dataDisponivel}</p>
                                     </div>
-                                </div>
-                                <div className="p-8 bg-nexus-900 flex justify-end">
-                                    <button onClick={() => setSelectedBuyingDetail(null)} className="px-10 py-4 bg-nexus-700 hover:bg-nexus-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all">Fechar Detalhes</button>
                                 </div>
                             </div>
                         </div>
@@ -1000,7 +996,7 @@ export const TeleinfoReport: React.FC = () => {
         <div className="flex flex-col h-full space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">Relatórios & Auditoria IA</h2>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">Relatórios & Auditoria IA</h2>
                   <p className="text-nexus-400 text-sm">Visão executiva e auditoria de obras Teleinfo</p>
                 </div>
                 <div className="flex bg-nexus-800 p-1.5 rounded-xl border border-nexus-700 shadow-xl">

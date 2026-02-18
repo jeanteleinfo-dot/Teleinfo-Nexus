@@ -10,12 +10,16 @@ const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-nexus-900 flex flex-col items-center justify-center space-y-4">
-        <div className="w-16 h-16 relative">
-          <div className="absolute inset-0 border-4 border-blue-600/20 rounded-full"></div>
-          <Loader2 className="w-16 h-16 text-blue-600 animate-spin absolute inset-0" />
+      <div className="min-h-screen bg-nexus-900 flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-6 animate-pulse">
+          <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/20 transform rotate-3">
+             <span className="text-5xl font-black text-white italic">N</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            <p className="text-nexus-400 font-black text-[10px] uppercase tracking-[0.3em]">Autenticando Nexus</p>
+          </div>
         </div>
-        <p className="text-nexus-400 font-black text-xs uppercase tracking-[0.2em] animate-pulse">Iniciando Nexus</p>
       </div>
     );
   }
