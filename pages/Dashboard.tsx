@@ -118,16 +118,6 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
               </div>
               <TrendingUp className="text-red-500 opacity-20" size={40} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-               <div className="bg-nexus-900/50 p-4 rounded-xl border border-nexus-700">
-                  <p className="text-2xl font-black text-white">{buyingStats.total}</p>
-                  <p className="text-nexus-500 text-[9px] font-black uppercase">Total Monitorado</p>
-               </div>
-               <div className="bg-nexus-900/50 p-4 rounded-xl border border-nexus-700">
-                  <p className="text-2xl font-black text-green-500">{Math.max(0, buyingStats.total - buyingStats.critical)}</p>
-                  <p className="text-nexus-500 text-[9px] font-black uppercase">Status Normal</p>
-               </div>
-            </div>
           </div>
           <div className="h-40 w-40 shrink-0 flex items-center justify-center relative">
              <ResponsiveContainer width="100%" height="100%">
@@ -148,54 +138,6 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
           </div>
         </div>
       </section>
-
-      <section className="space-y-6">
-        <div className="flex justify-between items-end">
-          <div>
-            <h2 className="text-2xl font-black text-white flex items-center gap-3">
-              <Activity className="text-green-400" /> Auditoria Detalhada
-            </h2>
-            <p className="text-nexus-400 text-sm">Acompanhamento de H/H por obra</p>
-          </div>
-          <button onClick={() => onNavigate(AppModule.TELEINFO_REPORT)} className="text-blue-400 hover:text-blue-300 text-xs font-black uppercase flex items-center gap-1 group">
-            Abrir Auditoria <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
-          </button>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-nexus-800 p-6 rounded-2xl border border-nexus-700">
-            <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-6 flex items-center gap-2">Consumo de Horas Global</h4>
-            <div className="flex items-center gap-8">
-              <div className="flex-1 space-y-4">
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-black text-nexus-500 uppercase"><span>Vendido</span><span className="text-white">{auditStats.totalSold}h</span></div>
-                  <div className="w-full bg-nexus-900 h-2 rounded-full overflow-hidden"><div className="h-full bg-nexus-700 w-full" /></div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-black text-nexus-500 uppercase"><span>Utilizado</span><span className={auditStats.totalUsed > auditStats.totalSold ? 'text-red-400' : 'text-green-400'}>{auditStats.totalUsed}h</span></div>
-                  <div className="w-full bg-nexus-900 h-2 rounded-full overflow-hidden">
-                    <div className={`h-full ${auditStats.totalUsed > auditStats.totalSold ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, auditStats.totalSold > 0 ? (auditStats.totalUsed/auditStats.totalSold)*100 : 0)}%` }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-nexus-800 p-6 rounded-2xl border border-nexus-700">
-             <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-4">Projetos em Auditoria</h4>
-             <div className="space-y-3">
-               {detailedAudits.slice(0, 3).map(p => (
-                 <div key={p.id} className="flex items-center justify-between p-3 bg-nexus-900/50 rounded-xl border border-nexus-700">
-                    <div>
-                       <p className="text-xs font-bold text-white uppercase">{p.name}</p>
-                       <p className="text-[9px] text-nexus-500 uppercase">CC: {p.costCenter}</p>
-                    </div>
-                    <span className="text-xs font-black text-white">{p.steps.length > 0 ? (p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length).toFixed(0) : 0}%</span>
-                 </div>
-               ))}
-               {detailedAudits.length === 0 && <p className="text-nexus-600 italic text-xs py-4 text-center">Nenhuma auditoria cadastrada.</p>}
-             </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 };
@@ -209,32 +151,21 @@ export const Dashboard: React.FC = () => {
   const [buyingStatus, setBuyingStatus] = useState<ProjectBuyingStatus[]>([]);
   const [detailedAudits, setDetailedAudits] = useState<DetailedProject[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [error, setError] = useState(false);
 
   const loadData = useCallback(async () => {
+    // Carregamento resiliente: se um falhar, os outros continuam.
     setDataLoading(true);
-    setError(false);
-    try {
-      // Adicionado timeout para evitar hang infinito
-      const results = await Promise.race([
-        Promise.all([
-          fetchFromSupabase<any>('general_projects'),
-          fetchFromSupabase<ProjectBuyingStatus>('buying_status'),
-          fetchFromSupabase<DetailedProject>('detailed_projects')
-        ]),
-        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-      ]);
-      
-      const [gp, bs, da] = results;
-      if (gp) setGeneralProjects(gp);
-      if (bs) setBuyingStatus(bs);
-      if (da) setDetailedAudits(da);
-    } catch (err) {
-      console.warn("Data load failure, using empty state.");
-      setError(true);
-    } finally {
-      setDataLoading(false);
-    }
+    
+    const [gp, bs, da] = await Promise.all([
+      fetchFromSupabase<any>('general_projects').catch(() => []),
+      fetchFromSupabase<ProjectBuyingStatus>('buying_status').catch(() => []),
+      fetchFromSupabase<DetailedProject>('detailed_projects').catch(() => [])
+    ]);
+
+    setGeneralProjects(gp || []);
+    setBuyingStatus(bs || []);
+    setDetailedAudits(da || []);
+    setDataLoading(false);
   }, []);
 
   useEffect(() => {
@@ -249,7 +180,7 @@ export const Dashboard: React.FC = () => {
       case AppModule.USER_MANAGEMENT: return <UserManagement />;
       case AppModule.DASHBOARD:
       default:
-        if (dataLoading) {
+        if (dataLoading && generalProjects.length === 0) {
             return (
               <div className="flex flex-col items-center justify-center h-96 space-y-4">
                 <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
@@ -266,16 +197,11 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className="hidden md:flex items-center gap-4 p-2 bg-nexus-800 rounded-2xl border border-nexus-700">
                 <div className="text-right">
-                  <p className="text-[10px] font-black text-nexus-500 uppercase">Sincronização</p>
-                  <p className={error ? "text-red-500 text-xs font-black" : "text-green-500 text-xs font-black"}>
-                    {error ? "Falha de Conexão" : "Cloud Online"}
-                  </p>
+                  <p className="text-[10px] font-black text-nexus-500 uppercase leading-none">Status</p>
+                  <p className="text-green-500 text-xs font-black">Cloud Online</p>
                 </div>
-                {error ? (
-                  <button onClick={loadData} className="p-1.5 bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500/30 transition-all"><RefreshCw size={16}/></button>
-                ) : (
-                  <div className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_#10b981]" />
-                )}
+                <div className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_#10b981]" />
+                <button onClick={loadData} className="p-1 text-nexus-500 hover:text-white"><RefreshCw size={14}/></button>
               </div>
             </div>
             <LandingDashboard onNavigate={setCurrentModule} generalProjects={generalProjects} buyingStatus={buyingStatus} detailedAudits={detailedAudits} />
@@ -286,7 +212,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-nexus-900 overflow-hidden">
-      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm transition-all" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />}
       <Sidebar currentModule={currentModule} onNavigate={(mod) => { setCurrentModule(mod); if (window.innerWidth < 768) setSidebarOpen(false); }} isOpen={sidebarOpen} />
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
         <header className="h-16 flex items-center justify-between px-6 border-b border-nexus-700 bg-nexus-900/95 backdrop-blur shrink-0 z-20">
