@@ -32,33 +32,22 @@ const SummaryCard: React.FC<{ title: string; value: string | number; subValue?: 
   </div>
 );
 
-const LandingDashboard: React.FC<{ onNavigate: (mod: AppModule) => void }> = ({ onNavigate }) => {
-  const [generalProjects, setGeneralProjects] = useState<any[]>([]);
-  const [buyingStatus, setBuyingStatus] = useState<ProjectBuyingStatus[]>([]);
-  const [detailedAudits, setDetailedAudits] = useState<DetailedProject[]>([]);
-  const [loading, setLoading] = useState(true);
+interface LandingDashboardProps {
+  onNavigate: (mod: AppModule) => void;
+  generalProjects: any[];
+  buyingStatus: ProjectBuyingStatus[];
+  detailedAudits: DetailedProject[];
+}
 
-  useEffect(() => {
-    const loadAllData = async () => {
-      setLoading(true);
-      const [gp, bs, da] = await Promise.all([
-        fetchFromSupabase<any>('general_projects'),
-        fetchFromSupabase<ProjectBuyingStatus>('buying_status'),
-        fetchFromSupabase<DetailedProject>('detailed_projects')
-      ]);
-      if (gp) setGeneralProjects(gp);
-      if (bs) setBuyingStatus(bs);
-      if (da) setDetailedAudits(da);
-      setLoading(false);
-    };
-    loadAllData();
-  }, []);
-
+const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, generalProjects, buyingStatus, detailedAudits }) => {
   // Memolized metrics
   const projectStats = useMemo(() => {
     const total = generalProjects.length;
     const avg = total > 0 ? (generalProjects.reduce((acc, p) => acc + (p.perc || 0), 0) / total).toFixed(0) : 0;
-    const notStarted = generalProjects.filter(p => p.status?.toUpperCase().includes('NAO INICIADO')).length;
+    const notStarted = generalProjects.filter(p => {
+      const s = p.status?.toUpperCase() || '';
+      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO");
+    }).length;
     return { total, avg, notStarted };
   }, [generalProjects]);
 
@@ -78,15 +67,6 @@ const LandingDashboard: React.FC<{ onNavigate: (mod: AppModule) => void }> = ({ 
     }).length;
     return { totalSold, totalUsed, criticalHH };
   }, [detailedAudits]);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-nexus-400 font-bold animate-pulse uppercase text-xs tracking-widest">Sincronizando Plataforma Nexus...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-10 animate-fadeIn pb-20">
@@ -155,7 +135,7 @@ const LandingDashboard: React.FC<{ onNavigate: (mod: AppModule) => void }> = ({ 
                   <Pie
                     data={[
                       { name: 'Crítico', value: buyingStats.critical },
-                      { name: 'OK', value: buyingStats.total - buyingStats.critical }
+                      { name: 'OK', value: Math.max(0, buyingStats.total - buyingStats.critical) }
                     ]}
                     innerRadius={45}
                     outerRadius={65}
@@ -190,7 +170,6 @@ const LandingDashboard: React.FC<{ onNavigate: (mod: AppModule) => void }> = ({ 
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Card Horas */}
           <div className="bg-nexus-800 p-6 rounded-2xl border border-nexus-700">
             <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-6 flex items-center gap-2">
               <Timer size={14} className="text-blue-400" /> Consumo de Horas (Vendido x Utilizado)
@@ -213,7 +192,7 @@ const LandingDashboard: React.FC<{ onNavigate: (mod: AppModule) => void }> = ({ 
                   </div>
                   <div className="w-full bg-nexus-900 h-2 rounded-full overflow-hidden">
                     <div className={`h-full ${auditStats.totalUsed > auditStats.totalSold ? 'bg-red-500' : 'bg-green-500'}`} 
-                         style={{ width: `${Math.min(100, (auditStats.totalUsed / auditStats.totalSold) * 100)}%` }} />
+                         style={{ width: `${Math.min(100, auditStats.totalSold > 0 ? (auditStats.totalUsed / auditStats.totalSold) * 100 : 0)}%` }} />
                   </div>
                 </div>
               </div>
@@ -229,7 +208,6 @@ const LandingDashboard: React.FC<{ onNavigate: (mod: AppModule) => void }> = ({ 
             )}
           </div>
 
-          {/* Lista de Projetos Recentes */}
           <div className="bg-nexus-800 p-6 rounded-2xl border border-nexus-700">
              <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest mb-4">Últimas Auditorias Ativas</h4>
              <div className="space-y-3">
@@ -263,6 +241,30 @@ export const Dashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user } = useAuth();
 
+  // Lifted state for the landing dashboard to avoid re-fetching on every tab switch
+  const [generalProjects, setGeneralProjects] = useState<any[]>([]);
+  const [buyingStatus, setBuyingStatus] = useState<ProjectBuyingStatus[]>([]);
+  const [detailedAudits, setDetailedAudits] = useState<DetailedProject[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        const [gp, bs, da] = await Promise.all([
+          fetchFromSupabase<any>('general_projects'),
+          fetchFromSupabase<ProjectBuyingStatus>('buying_status'),
+          fetchFromSupabase<DetailedProject>('detailed_projects')
+        ]);
+        if (gp) setGeneralProjects(gp);
+        if (bs) setBuyingStatus(bs);
+        if (da) setDetailedAudits(da);
+      } finally {
+        setDataLoading(false);
+      }
+    };
+    loadDashboardData();
+  }, []);
+
   const renderModule = () => {
     switch (currentModule) {
       case AppModule.TELEINFO_REPORT:
@@ -275,6 +277,14 @@ export const Dashboard: React.FC = () => {
         return <UserManagement />;
       case AppModule.DASHBOARD:
       default:
+        if (dataLoading) {
+            return (
+              <div className="flex flex-col items-center justify-center h-96 space-y-4">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-nexus-400 font-bold animate-pulse uppercase text-xs tracking-widest">Sincronizando Plataforma Nexus...</p>
+              </div>
+            );
+        }
         return (
           <div className="space-y-6 animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
@@ -291,9 +301,12 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             
-            {/* Landing Dashboard with Unified Indicators */}
-            <LandingDashboard onNavigate={setCurrentModule} />
-
+            <LandingDashboard 
+              onNavigate={setCurrentModule} 
+              generalProjects={generalProjects}
+              buyingStatus={buyingStatus}
+              detailedAudits={detailedAudits}
+            />
           </div>
         );
     }
@@ -329,10 +342,10 @@ export const Dashboard: React.FC = () => {
           
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end mr-2">
-              <span className="text-xs font-bold text-white">{user?.name}</span>
+              <span className="text-xs font-bold text-white truncate max-w-[120px]">{user?.name}</span>
               <span className="text-[10px] text-nexus-500 font-black uppercase">{user?.role}</span>
             </div>
-            <img src={user?.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-nexus-600 shadow-lg" />
+            <img src={user?.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-nexus-600 shadow-lg shrink-0" />
           </div>
         </header>
 

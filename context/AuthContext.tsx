@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const mapSupabaseUserToNexus = async (sbUser: any) => {
     try {
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', sbUser.id)
@@ -57,7 +57,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(nexusUser);
     } catch (e) {
-      console.warn("User mapping error (using fallback):", e);
       setUser({
         id: sbUser.id,
         username: sbUser.email?.split('@')[0] || 'usuario',
@@ -73,6 +72,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initAuth = async () => {
+      // Timeout de segurança para não travar a tela de loading infinitamente
+      const timeout = setTimeout(() => {
+        if (mounted && loading) setLoading(false);
+      }, 5000);
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && mounted) {
@@ -82,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {
         console.error("Auth init error:", e);
       } finally {
+        clearTimeout(timeout);
         if (mounted) setLoading(false);
       }
     };
@@ -89,13 +94,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await mapSupabaseUserToNexus(session.user);
-        await fetchProfiles();
-      } else {
-        setUser(null);
+      try {
+        if (session?.user) {
+          await mapSupabaseUserToNexus(session.user);
+          await fetchProfiles();
+        } else {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (mounted) setLoading(false);
     });
 
     return () => {
@@ -118,8 +126,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setUser(null);
+    }
   };
 
   const addUser = async (userData: any) => {
