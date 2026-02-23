@@ -1,17 +1,6 @@
-@import "tailwindcss";
-
-@theme {
-  --color-nexus-900: #0f172a;
-  --color-nexus-800: #1e293b;
-  --color-nexus-700: #334155;
-  --color-nexus-600: #475569;
-  --color-nexus-500: #64748b;
-  --color-nexus-400: #94a3b8;
-  --color-nexus-300: #cbd5e1;
-  --color-nexus-accent: #3b82f6;
-  --color-nexus-warning: #f59e0b;
-  --color-nexus-danger: #ef4444;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   body {
@@ -21,6 +10,7 @@
 }
 
 @layer components {
+  /* Custom Scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
   }
@@ -35,11 +25,22 @@
   }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.5s ease-out forwards;
+/* Markdown Styles */
+.prose-invert {
+  --tw-prose-body: #94a3b8;
+  --tw-prose-headings: #ffffff;
+  --tw-prose-lead: #94a3b8;
+  --tw-prose-links: #3b82f6;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-counters: #64748b;
+  --tw-prose-bullets: #475569;
+  --tw-prose-hr: #334155;
+  --tw-prose-quotes: #f1f5f9;
+  --tw-prose-quote-borders: #334155;
+  --tw-prose-captions: #64748b;
+  --tw-prose-code: #ffffff;
+  --tw-prose-pre-code: #e2e8f0;
+  --tw-prose-pre-bg: #1e293b;
+  --tw-prose-th-borders: #334155;
+  --tw-prose-td-borders: #1e293b;
 }
