@@ -12,6 +12,19 @@ export default defineConfig(({ mode }) => {
       plugins: [
         react()
       ],
+      build: {
+        chunkSizeWarningLimit: 1000,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'vendor-react': ['react', 'react-dom'],
+              'vendor-charts': ['recharts'],
+              'vendor-ai': ['@google/genai'],
+              'vendor-utils': ['lucide-react', 'react-markdown']
+            }
+          }
+        }
+      },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
