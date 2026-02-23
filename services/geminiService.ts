@@ -97,3 +97,69 @@ export const generateDetailedProjectRiskAnalysis = async (project: DetailedProje
       return "Erro ao gerar análise detalhada.";
   }
 };
+
+export const generateSeniorPlanningAuditReport = async (project: DetailedProject): Promise<string> => {
+  if (!apiKey) return "Erro: API Key não configurada.";
+
+  const calculateTimeProgress = (startStr: string, endStr: string) => {
+    if (!startStr || !endStr) return 0;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const today = new Date();
+    if (today < start) return 0;
+    if (today > end) return 100;
+    const total = end.getTime() - start.getTime();
+    const elapsed = today.getTime() - start.getTime();
+    return Math.min(100, Math.round((elapsed / total) * 100));
+  };
+
+  const timeProgress = calculateTimeProgress(project.start, project.end);
+  const avgExec = project.steps.length > 0 ? project.steps.reduce((acc, s) => acc + s.perc, 0) / project.steps.length : 0;
+
+  const prompt = `Engenheiro AI Planejamento Sênior, Especialista em Custos e Auditor de Obras. Sua função é analisar os indicadores de um projeto de engenharia/tecnologia e emitir um relatório técnico gerencial. O foco é cruzar os dados de prazo (tempo decorrido), avanço físico da obra e o consumo de Horas-Homem (H/H) em três frentes: Infraestrutura, Segurança e Tecnologia.
+
+**Fator Crítico de Auditoria:**
+Considere que, historicamente neste projeto, **80% dos atrasos e do consumo excedente de H/H são decorrentes de inclusões de trabalho fora do escopo original (Extra-Escopo)**.
+
+Dados do Projeto:
+Projeto: ${project.name}
+Centro de Custo / BU: ${project.costCenter} / ${project.bu}
+Período: ${project.start} a ${project.end}
+Tempo de Cronograma Decorrido: ${timeProgress}%
+Avanço Físico Total (Fases): ${avgExec.toFixed(2)}%
+
+Gestão de H/H (Vendida vs. Utilizada):
+Infraestrutura: Vendida = ${project.soldHours.infra} | Utilizada = ${project.usedHours.infra}
+Segurança (SEC): Vendida = ${project.soldHours.sse} | Utilizada = ${project.usedHours.sse}
+Tecnologia (TI): Vendida = ${project.soldHours.ti} | Utilizada = ${project.usedHours.ti}
+
+Sua Tarefa:
+Analise os dados fornecidos e gere um Relatório de Auditoria estruturado em formato Markdown, contendo obrigatoriamente as seguintes seções:
+
+1. Parecer Técnico Geral
+Avalie a saúde geral do projeto comparando o Tempo Decorrido com o Avanço Físico. Diga claramente se a obra está adiantada, atrasada ou dentro do cronograma, apontando o nível de criticidade.
+
+2. Análise de Desempenho de H/H e Impacto de Escopo
+Avalie o consumo de horas de cada disciplina. Atribua o desvio encontrado ao fator de **80% de trabalho fora do escopo**. Destaque o impacto financeiro e operacional dessa variação.
+
+3. Projeção do H/H Ideal e Sugestão de Aditivo
+Com base no Avanço Físico atual (${avgExec.toFixed(2)}%), estime o limite "ideal" de horas para o escopo original. Em seguida, **calcule e sugira explicitamente o volume de horas adicionais que deve ser cobrado em uma proposta de aditivo** para cobrir os 80% de desvios por extra-escopo, visando a saúde financeira do contrato.
+
+4. Sugestões e Plano de Ação
+Liste de 3 a 4 recomendações práticas para regularizar o contrato (ex: formalização de aditivos, controle rígido de escopo) e para manter o bom desempenho técnico.
+
+Diretrizes de Estilo:
+Seja analítico, direto e profissional. Use negrito para destacar números, alertas e a sugestão de cobrança adicional.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { temperature: 0.4 }
+    });
+    return response.text || "Relatório de auditoria indisponível.";
+  } catch (error) {
+    console.error(error);
+    return "Erro ao gerar relatório de auditoria sênior.";
+  }
+};

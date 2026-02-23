@@ -23,16 +23,24 @@ export const Login: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    
+    // Safety timeout: if we're still here after 8 seconds, reset submitting state
+    const timeout = setTimeout(() => {
+      setIsSubmitting(false);
+    }, 8000);
+
     try {
       const result = await login(email, password);
       if (!result.success) {
         setError(result.error || 'Credenciais inválidas. Verifique seu email e senha.');
         setIsSubmitting(false);
+        clearTimeout(timeout);
       }
       // Se sucesso, o AuthContext atualizará o estado global e o App.tsx redirecionará
     } catch (err) {
       setError('Erro de conexão com o servidor. Tente novamente.');
       setIsSubmitting(false);
+      clearTimeout(timeout);
     }
   };
 

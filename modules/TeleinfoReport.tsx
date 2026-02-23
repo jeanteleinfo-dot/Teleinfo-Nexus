@@ -7,10 +7,13 @@ import {
   UploadCloud, FileText, Bot, BrainCircuit, X, AlertTriangle, GanttChartSquare, 
   Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity,
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
-  History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye
+  History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
+  FileSearch, Loader2
 } from 'lucide-react';
+import Markdown from 'react-markdown';
 import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
 import { supabase, syncToSupabase, fetchFromSupabase } from '../services/supabase';
+import { generateSeniorPlanningAuditReport } from '../services/geminiService';
 
 // Hook para persistência no Supabase
 function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>, () => void] {
@@ -242,7 +245,12 @@ const GeneralDashboardView: React.FC = () => {
     );
 };
 
-const MonitoringView: React.FC = () => {
+interface MonitoringProps {
+    onGenerateAiReport: (project: DetailedProject) => void;
+    isGeneratingReport: boolean;
+}
+
+const MonitoringView: React.FC<MonitoringProps> = ({ onGenerateAiReport, isGeneratingReport }) => {
     const [projects, setProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
     const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
     const [editingProject, setEditingProject] = useState<DetailedProject | null>(null);
@@ -339,6 +347,14 @@ const MonitoringView: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => onGenerateAiReport(p)} 
+                                            disabled={isGeneratingReport}
+                                            className="p-2 text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors flex items-center gap-1"
+                                            title="Gerar Relatório Auditoria Sênior IA"
+                                        >
+                                            {isGeneratingReport ? <Loader2 size={16} className="animate-spin" /> : <FileSearch size={16}/>}
+                                        </button>
                                         <button onClick={() => { setEditingProject(p); setViewMode('form'); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"><GanttChartSquare size={16}/></button>
                                         <button onClick={() => { if(confirm(`Excluir auditoria de ${p.name}?`)) setProjects(projects.filter(x => x.id !== p.id)) }} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={16}/></button>
                                     </div>
@@ -604,9 +620,11 @@ interface PresentationProps {
     generalProjects: any[];
     detailedProjects: DetailedProject[];
     buyingStatus: ProjectBuyingStatus[];
+    onGenerateAiReport: (project: DetailedProject) => void;
+    isGeneratingReport: boolean;
 }
 
-const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detailedProjects, buyingStatus }) => {
+const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detailedProjects, buyingStatus, onGenerateAiReport, isGeneratingReport }) => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [currentSlide, setCurrentSlide] = useState(0);
     const [selectedBuyingDetail, setSelectedBuyingDetail] = useState<ProjectBuyingStatus | null>(null);
@@ -792,6 +810,14 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                             <div className="flex gap-4 mt-2">
                                 <span className="bg-nexus-800 text-nexus-400 px-3 py-1 rounded text-xs font-black border border-nexus-700">CC: {project.costCenter}</span>
                                 <span className="bg-nexus-800 text-nexus-400 px-3 py-1 rounded text-xs font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
+                                <button 
+                                    onClick={() => onGenerateAiReport(project)}
+                                    disabled={isGeneratingReport}
+                                    className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-[10px] font-black uppercase flex items-center gap-2 shadow-lg shadow-purple-900/40 transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    {isGeneratingReport ? <Loader2 size={12} className="animate-spin" /> : <BrainCircuit size={12} />}
+                                    Auditoria Sênior IA
+                                </button>
                             </div>
                         </div>
                         <div className="text-right">
@@ -992,6 +1018,36 @@ export const TeleinfoReport: React.FC = () => {
     const [detailedProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
     const [buyingStatus] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
 
+    // AI Report State moved to parent
+    const [aiReport, setAiReport] = useState<{ content: string; projectName: string } | null>(null);
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+    const handleGenerateAiReport = async (project: DetailedProject) => {
+        setIsGeneratingReport(true);
+        try {
+            const report = await generateSeniorPlanningAuditReport(project);
+            setAiReport({ content: report, projectName: project.name });
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao gerar relatório de auditoria.");
+        } finally {
+            setIsGeneratingReport(false);
+        }
+    };
+
+    const handleExportReport = () => {
+        if (!aiReport) return;
+        const blob = new Blob([aiReport.content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Relatorio_Auditoria_${aiReport.projectName.replace(/\s+/g, '_')}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="flex flex-col h-full space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1010,15 +1066,63 @@ export const TeleinfoReport: React.FC = () => {
             </div>
             <div className="flex-1 min-h-0">
                 {activeTab === 'dashboard' && <GeneralDashboardView />}
-                {activeTab === 'monitoring' && <MonitoringView />}
+                {activeTab === 'monitoring' && (
+                    <MonitoringView 
+                        onGenerateAiReport={handleGenerateAiReport}
+                        isGeneratingReport={isGeneratingReport}
+                    />
+                )}
                 {activeTab === 'presentation' && (
                     <PresentationView 
                         generalProjects={generalProjects} 
                         detailedProjects={detailedProjects} 
                         buyingStatus={buyingStatus}
+                        onGenerateAiReport={handleGenerateAiReport}
+                        isGeneratingReport={isGeneratingReport}
                     />
                 )}
             </div>
+
+            {/* AI Report Modal - Now in Parent */}
+            {aiReport && (
+                <div className="fixed inset-0 bg-black/80 z-[2000] flex items-center justify-center p-4 md:p-8 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-nexus-800 border border-nexus-700 rounded-3xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+                        <div className="bg-purple-600 p-6 flex justify-between items-center text-white shrink-0">
+                            <div className="flex items-center gap-3">
+                                <BrainCircuit size={32} />
+                                <div>
+                                    <h3 className="font-black text-xl uppercase italic">Auditoria Sênior IA</h3>
+                                    <p className="text-xs font-bold text-white/70 uppercase tracking-widest">{aiReport.projectName}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={handleExportReport}
+                                    className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold uppercase"
+                                    title="Exportar Relatório (.md)"
+                                >
+                                    <Download size={18} />
+                                    <span className="hidden sm:inline">Exportar</span>
+                                </button>
+                                <button onClick={() => setAiReport(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={24}/></button>
+                            </div>
+                        </div>
+                        <div className="p-8 overflow-y-auto custom-scrollbar bg-nexus-900/50">
+                            <div className="prose prose-invert max-w-none 
+                                prose-headings:text-white prose-headings:border-b prose-headings:border-nexus-700 prose-headings:pb-2 prose-headings:mt-8 first:prose-headings:mt-0
+                                prose-p:text-nexus-300 prose-p:leading-relaxed
+                                prose-strong:text-purple-400 prose-strong:font-black
+                                prose-ul:text-nexus-300 prose-li:my-2
+                                prose-hr:border-nexus-700">
+                                <Markdown>{aiReport.content}</Markdown>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex justify-end bg-nexus-800 shrink-0">
+                            <button onClick={() => setAiReport(null)} className="bg-nexus-700 hover:bg-nexus-600 text-white px-8 py-2 rounded-xl font-bold transition-all">Fechar Relatório</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
