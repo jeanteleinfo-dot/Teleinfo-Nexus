@@ -84,13 +84,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initAuth = async () => {
       try {
+        // Safety timeout to prevent getting stuck in loading state
+        const safetyTimeout = setTimeout(() => {
+          if (mounted) setLoading(false);
+        }, 5000);
+
         const { data: { session } } = await supabase.auth.getSession();
+        clearTimeout(safetyTimeout);
+
         if (session?.user && mounted) {
           await enrichUserSession(session.user);
           fetchProfiles();
         }
       } catch (e) {
-        console.error("Session check error");
+        console.error("Session check error", e);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -98,20 +105,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        enrichUserSession(session.user);
-        if (event === 'SIGNED_IN') fetchProfiles();
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.user) {
+          enrichUserSession(session.user);
+          if (event === 'SIGNED_IN') fetchProfiles();
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+      return () => {
+        mounted = false;
+        subscription.unsubscribe();
+      };
+    } catch (e) {
+      console.error("Auth subscription error", e);
+      setLoading(false);
+      return () => { mounted = false; };
+    }
   }, [enrichUserSession, fetchProfiles]);
 
   const login = async (email: string, passwordInput: string) => {
