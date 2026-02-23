@@ -83,23 +83,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initAuth = async () => {
+      console.log("AuthContext: Initializing auth...");
       try {
         // Safety timeout to prevent getting stuck in loading state
         const safetyTimeout = setTimeout(() => {
-          if (mounted) setLoading(false);
-        }, 5000);
+          if (mounted) {
+            console.warn("AuthContext: Safety timeout reached, forcing loading false.");
+            setLoading(false);
+          }
+        }, 8000);
 
+        console.log("AuthContext: Getting session...");
         const { data: { session } } = await supabase.auth.getSession();
         clearTimeout(safetyTimeout);
+        console.log("AuthContext: Session retrieved:", !!session);
 
         if (session?.user && mounted) {
           await enrichUserSession(session.user);
           fetchProfiles();
         }
       } catch (e) {
-        console.error("Session check error", e);
+        console.error("AuthContext: Session check error", e);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          console.log("AuthContext: Initialization complete, loading false.");
+          setLoading(false);
+        }
       }
     };
 
