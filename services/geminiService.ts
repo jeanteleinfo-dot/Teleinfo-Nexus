@@ -1,16 +1,28 @@
 import { GoogleGenAI } from "@google/genai";
 import { Project, DetailedProject } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-// Initialize safe instance, handle missing key gracefully in UI
-const ai = new GoogleGenAI({ apiKey });
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (aiInstance) return aiInstance;
+  
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) {
+    console.warn("Gemini API Key is missing. AI features will be disabled.");
+    return null;
+  }
+  
+  aiInstance = new GoogleGenAI({ apiKey });
+  return aiInstance;
+};
 
 export const generateExecutiveSummary = async (contextData: string): Promise<string> => {
-  if (!apiKey) return "Erro: API Key não configurada.";
+  const ai = getAI();
+  if (!ai) return "Erro: API Key não configurada.";
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: `Você é um assistente executivo sênior de uma plataforma de TI chamada Teleinfo Nexus.
       
       Analise os seguintes dados brutos do sistema e forneça um resumo executivo de 1 parágrafo (max 50 palavras) em Português do Brasil.
@@ -30,11 +42,12 @@ export const generateExecutiveSummary = async (contextData: string): Promise<str
 };
 
 export const generateProjectRiskAnalysis = async (project: Project): Promise<string> => {
-  if (!apiKey) return "Erro: API Key não configurada.";
+  const ai = getAI();
+  if (!ai) return "Erro: API Key não configurada.";
 
   try {
       const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           contents: `Você é um Gerente de Projetos Sênior da Teleinfo.
           Analise o seguinte projeto (linha de CSV) e identifique riscos potenciais, sugestões de ação e um breve status.
           Seja direto e profissional.
@@ -58,7 +71,8 @@ export const generateProjectRiskAnalysis = async (project: Project): Promise<str
 };
 
 export const generateDetailedProjectRiskAnalysis = async (project: DetailedProject): Promise<string> => {
-  if (!apiKey) return "Erro: API Key não configurada.";
+  const ai = getAI();
+  if (!ai) return "Erro: API Key não configurada.";
 
   try {
       const soldTotal = Object.values(project.soldHours).reduce((a, b) => a + b, 0);
@@ -66,7 +80,7 @@ export const generateDetailedProjectRiskAnalysis = async (project: DetailedProje
       const hoursRatio = soldTotal > 0 ? (usedTotal / soldTotal * 100).toFixed(1) : 0;
 
       const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           contents: `Atue como um Auditor de Projetos. Analise detalhadamente o projeto abaixo.
           
           Nome: ${project.name}
@@ -99,7 +113,8 @@ export const generateDetailedProjectRiskAnalysis = async (project: DetailedProje
 };
 
 export const generateSeniorPlanningAuditReport = async (project: DetailedProject): Promise<string> => {
-  if (!apiKey) return "Erro: API Key não configurada.";
+  const ai = getAI();
+  if (!ai) return "Erro: API Key não configurada.";
 
   const calculateTimeProgress = (startStr: string, endStr: string) => {
     if (!startStr || !endStr) return 0;
@@ -153,7 +168,7 @@ Seja analítico, direto e profissional. Use negrito para destacar números, aler
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: { temperature: 0.4 }
     });
