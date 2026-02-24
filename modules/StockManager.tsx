@@ -42,26 +42,48 @@ const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     const result: ProjectBuyingStatus[] = [];
     
+    if (lines.length < 2) return [];
+
+    // Detectar separador (preferência por ponto e vírgula comum no Brasil)
+    const header = lines[0];
+    const sep = header.includes(';') ? ';' : ',';
+    
     // Esperado: Título; Nº Projeto; Criticidade; A Comprar; Comprado; Entregue; Data disponivel
     for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(';');
+        const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
         if (cols.length < 3) continue;
         
-        const rawStatus = cols[2]?.trim() || 'Padrão';
-        let status: 'Padrão' | 'Intermediário' | 'Crítico' = 'Padrão';
+        const rawStatus = cols[2] || 'Padrão';
+        const aComprar = cols[3] || '-';
         
-        if (rawStatus.toLowerCase().includes('critico') || rawStatus.toLowerCase().includes('crítico')) status = 'Crítico';
-        else if (rawStatus.toLowerCase().includes('intermediario') || rawStatus.toLowerCase().includes('intermediário')) status = 'Intermediário';
+        let status: 'Padrão' | 'Intermediário' | 'Crítico' = 'Padrão';
+        const s = rawStatus.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        if (s.includes('critico') || s.includes('alta') || s.includes('urgente') || s.includes('critical') || s.includes('atrasado')) {
+            status = 'Crítico';
+        } else if (s.includes('intermediario') || s.includes('media') || s.includes('atencao') || s.includes('alerta')) {
+            status = 'Intermediário';
+        } else if (aComprar !== '-' && aComprar.trim() !== '' && aComprar.toLowerCase() !== 'nenhum' && status === 'Padrão') {
+            // Se tem algo a comprar e não foi marcado explicitamente, marcamos como Crítico se houver texto relevante
+            // ou Intermediário por padrão. Para garantir o "vermelho" que o usuário pediu, vamos ser mais agressivos
+            // se o texto de 'aComprar' parecer urgente.
+            const a = aComprar.toLowerCase();
+            if (a.includes('urgente') || a.includes('pendente') || a.includes('atraso')) {
+                status = 'Crítico';
+            } else {
+                status = 'Intermediário';
+            }
+        }
         
         result.push({
             id: `buy-${i}-${Date.now()}`,
-            projeto: cols[0]?.trim() || 'N/A', // Título
-            numeroProjeto: cols[1]?.trim() || 'N/A', // Nº Projeto
-            status: status, // Criticidade
-            aComprar: cols[3]?.trim() || '-',
-            comprados: cols[4]?.trim() || '-', // Comprado
-            entregue: cols[5]?.trim() || '-',
-            dataDisponivel: cols[6]?.trim() || 'A definir', // Data disponível
+            projeto: cols[0] || 'N/A',
+            numeroProjeto: cols[1] || 'N/A',
+            status: status,
+            aComprar: aComprar,
+            comprados: cols[4] || '-',
+            entregue: cols[5] || '-',
+            dataDisponivel: cols[6] || 'A definir',
         });
     }
     return result;

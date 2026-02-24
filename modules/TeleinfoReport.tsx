@@ -715,7 +715,7 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             return (
                 <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
                     <h2 className="text-4xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Portfólio Completo</h2>
-                    <div className="grid grid-cols-3 gap-8">
+                    <div className={`grid gap-8 ${stats.notStarted > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                         <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
                             <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Total de Projetos</p>
                             <h3 className="text-7xl font-black text-white">{stats.total}</h3>
@@ -728,19 +728,12 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                             <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Em Andamento</p>
                             <h3 className="text-7xl font-black text-blue-500">{stats.emAndamento}</h3>
                         </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-4 mt-6">
-                        {Object.entries(stats.statusCounts)
-                          .filter(([status]) => {
-                              const s = status.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                              return !s.includes('NAO INICIADO') && !s.includes('EM ANDAMENTO') && !s.includes('INICIADO');
-                          })
-                          .slice(0, 4).map(([status, count]) => (
-                            <div key={status} className="bg-nexus-900 p-4 rounded-xl border border-nexus-800">
-                                <p className="text-[10px] font-black text-nexus-500 uppercase truncate" title={status}>{status}</p>
-                                <p className="text-2xl font-black text-white">{count}</p>
+                        {stats.notStarted > 0 && (
+                            <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
+                                <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Não Iniciados</p>
+                                <h3 className="text-7xl font-black text-orange-500">{stats.notStarted}</h3>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
             );
