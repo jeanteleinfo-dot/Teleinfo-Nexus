@@ -110,23 +110,29 @@ const GeneralDashboardView: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const stats = useMemo(() => {
-        if (!projects.length) return { statusCounts: {}, avgCompletion: 0, total: 0, naoIniciados: 0 };
+        if (!projects.length) return { statusCounts: {}, avgCompletion: 0, total: 0, naoIniciados: 0, emAndamento: 0 };
         const counts: Record<string, number> = {};
         let totalPerc = 0;
         let naoIniciados = 0;
+        let emAndamento = 0;
         projects.forEach(p => {
             const sRaw = p.status?.trim() || 'NÃO DEFINIDO';
-            const sUpper = sRaw.toUpperCase();
+            const sUpper = sRaw.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             counts[sRaw] = (counts[sRaw] || 0) + 1;
             totalPerc += p.perc;
-            const isNaoIniciado = sUpper.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO");
-            if (isNaoIniciado) naoIniciados++;
+            
+            if (sUpper.includes("NAO INICIADO")) {
+                naoIniciados++;
+            } else if (sUpper.includes("EM ANDAMENTO") || sUpper.includes("INICIADO") || (p.perc > 0 && p.perc < 100)) {
+                emAndamento++;
+            }
         });
         return {
             statusCounts: counts,
             avgCompletion: (totalPerc / projects.length).toFixed(1),
             total: projects.length,
-            naoIniciados: naoIniciados
+            naoIniciados: naoIniciados,
+            emAndamento: emAndamento
         };
     }, [projects]);
 
@@ -200,12 +206,19 @@ const GeneralDashboardView: React.FC = () => {
                         <Clock className="text-red-500" size={20} />
                     </div>
                 </div>
+                <div className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
+                    <p className="text-[10px] font-black text-nexus-400 uppercase tracking-widest mb-1">Em Andamento</p>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-3xl font-black text-blue-400">{stats.emAndamento}</h3>
+                        <Activity className="text-blue-500" size={20} />
+                    </div>
+                </div>
                 {Object.entries(stats.statusCounts)
                   .filter(([status]) => {
                       const s = status.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                      return !s.includes('NAO INICIADO');
+                      return !s.includes('NAO INICIADO') && !s.includes('EM ANDAMENTO') && !s.includes('INICIADO');
                   })
-                  .slice(0, 2).map(([status, count]) => (
+                  .slice(0, 1).map(([status, count]) => (
                     <div key={status} className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
                         <div className="flex justify-between items-start mb-2">
                             <p className="text-[10px] font-black text-nexus-400 uppercase tracking-tighter truncate w-3/4">{status}</p>
@@ -655,17 +668,20 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         const total = generalProjects.length;
         let totalPerc = 0;
         let naoIniciados = 0;
+        let emAndamento = 0;
         const statusCounts: Record<string, number> = {};
 
         generalProjects.forEach(p => {
             const sRaw = p.status?.trim() || 'NÃO DEFINIDO';
-            const sUpper = sRaw.toUpperCase();
+            const sUpper = sRaw.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             statusCounts[sRaw] = (statusCounts[sRaw] || 0) + 1;
             totalPerc += (p.perc || 0);
             
-            // Lógica de normalização igual à da Visão Geral
-            const isNaoIniciado = sUpper.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("NAO INICIADO");
-            if (isNaoIniciado) naoIniciados++;
+            if (sUpper.includes("NAO INICIADO")) {
+                naoIniciados++;
+            } else if (sUpper.includes("EM ANDAMENTO") || sUpper.includes("INICIADO") || (p.perc > 0 && p.perc < 100)) {
+                emAndamento++;
+            }
         });
 
         const avg = total > 0 ? (totalPerc / total).toFixed(1) : 0;
@@ -676,7 +692,7 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         const criticalBuys = buyingStatus.filter(b => b.status === 'Crítico');
 
-        return { total, avg, notStarted: naoIniciados, statusCounts, buData, criticalBuys };
+        return { total, avg, notStarted: naoIniciados, emAndamento, statusCounts, buData, criticalBuys };
     }, [generalProjects, buyingStatus]);
 
     const renderSlide = () => {
@@ -709,15 +725,15 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                             <h3 className="text-7xl font-black text-blue-500">{stats.avg}%</h3>
                         </div>
                         <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Não Iniciados</p>
-                            <h3 className="text-7xl font-black text-orange-500">{stats.notStarted}</h3>
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Em Andamento</p>
+                            <h3 className="text-7xl font-black text-blue-500">{stats.emAndamento}</h3>
                         </div>
                     </div>
                     <div className="grid grid-cols-4 gap-4 mt-6">
                         {Object.entries(stats.statusCounts)
                           .filter(([status]) => {
                               const s = status.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                              return !s.includes('NAO INICIADO');
+                              return !s.includes('NAO INICIADO') && !s.includes('EM ANDAMENTO') && !s.includes('INICIADO');
                           })
                           .slice(0, 4).map(([status, count]) => (
                             <div key={status} className="bg-nexus-900 p-4 rounded-xl border border-nexus-800">
