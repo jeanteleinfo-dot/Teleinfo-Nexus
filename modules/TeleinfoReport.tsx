@@ -8,7 +8,7 @@ import {
   Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity,
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
   History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
-  FileSearch, Loader2
+  FileSearch, Loader2, Package, CheckCircle
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
@@ -629,6 +629,68 @@ const MonitoringView: React.FC<MonitoringProps> = ({ onGenerateAiReport, isGener
 
 // --- NOVO COMPONENTE DE APRESENTAÇÃO ATUALIZADO ---
 
+const BuyingDetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void }> = ({ project, onClose }) => {
+    const isCritico = project.status === 'Crítico';
+    const isIntermediario = project.status === 'Intermediário';
+    const color = isCritico ? 'red' : isIntermediario ? 'yellow' : 'green';
+    const Icon = isCritico ? AlertTriangle : isIntermediario ? Clock : CheckCircle;
+
+    return (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4 backdrop-blur-md" onClick={onClose}>
+            <div className={`bg-nexus-800 border-2 border-${color}-500/50 rounded-3xl w-full max-w-2xl shadow-2xl animate-fadeIn overflow-hidden`} onClick={e => e.stopPropagation()}>
+                <div className={`bg-${color}-600 p-6 flex justify-between items-center`}>
+                    <div className="flex items-center gap-3 text-white">
+                        <Icon size={32} />
+                        <div>
+                            <h3 className="font-black text-2xl uppercase tracking-tighter">Detalhes do Suprimento</h3>
+                            <p className="text-white/70 text-xs font-bold uppercase tracking-widest">{project.status}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="text-white/80 hover:text-white bg-white/10 p-2 rounded-full transition-colors"><X size={28}/></button>
+                </div>
+                
+                <div className="p-8 space-y-8">
+                    <div className="grid grid-cols-2 gap-8">
+                        <div className="col-span-2">
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-2 block">Título do Projeto</label>
+                            <p className="text-3xl font-black text-white leading-tight">{project.projeto}</p>
+                        </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-2 block">Nº CC / Projeto</label>
+                            <p className="text-xl text-white font-mono font-bold">{project.numeroProjeto}</p>
+                        </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-2 block">Data Disponível p/ Cliente</label>
+                            <p className="text-xl text-blue-400 font-black italic">{project.dataDisponivel}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                        <div className="bg-nexus-900/50 p-6 rounded-2xl border border-nexus-700">
+                            <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Materiais a Comprar</label>
+                            <p className={`text-xl font-bold ${isCritico ? 'text-red-400' : 'text-white'}`}>{project.aComprar}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                             <div className="bg-nexus-900/50 p-6 rounded-2xl border border-nexus-700">
+                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Já Comprados</label>
+                                <p className="text-white text-lg font-bold">{project.comprados}</p>
+                            </div>
+                            <div className="bg-nexus-900/50 p-6 rounded-2xl border border-nexus-700">
+                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Entregues</label>
+                                <p className="text-white text-lg font-bold">{project.entregue}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="bg-nexus-900 p-6 border-t border-nexus-700 flex justify-end">
+                    <button onClick={onClose} className="px-10 py-3 bg-nexus-700 text-white rounded-xl hover:bg-nexus-600 transition-all font-black text-sm uppercase tracking-widest">Fechar Detalhes</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface PresentationProps {
     generalProjects: any[];
     detailedProjects: DetailedProject[];
@@ -691,8 +753,21 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         const buData = Object.entries(buCounts).map(([name, value]) => ({ name, value }));
 
         const criticalBuys = buyingStatus.filter(b => b.status === 'Crítico');
+        const intermediateBuys = buyingStatus.filter(b => b.status === 'Intermediário');
+        const standardBuys = buyingStatus.filter(b => b.status === 'Padrão');
 
-        return { total, avg, notStarted: naoIniciados, emAndamento, statusCounts, buData, criticalBuys };
+        return { 
+            total, 
+            avg, 
+            notStarted: naoIniciados, 
+            emAndamento, 
+            statusCounts, 
+            buData, 
+            criticalBuys,
+            intermediateBuys,
+            standardBuys,
+            buyingTotal: buyingStatus.length
+        };
     }, [generalProjects, buyingStatus]);
 
     const renderSlide = () => {
@@ -761,43 +836,90 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         if (currentSlide === 3) {
             return (
-                <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
+                <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-center">
                     <div className="flex justify-between items-end">
-                        <h2 className="text-4xl font-black text-white border-l-8 border-red-600 pl-6 uppercase tracking-tight">Status de Compras Críticas</h2>
-                        <ShoppingCart className="text-red-600 mb-2" size={48} />
+                        <h2 className="text-4xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Status de Compras & Suprimentos</h2>
+                        <ShoppingCart className="text-blue-500 mb-2" size={48} />
                     </div>
-                    <div className="bg-nexus-800/50 rounded-3xl border border-nexus-700 overflow-hidden shadow-2xl">
-                        <table className="w-full text-left">
-                            <thead className="bg-nexus-900/80">
-                                <tr className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">
-                                    <th className="px-8 py-6">Projeto</th>
-                                    <th className="px-8 py-6">Materiais Pendentes</th>
-                                    <th className="px-8 py-6">Data Disponível</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-nexus-800">
-                                {stats.criticalBuys.length > 0 ? (
-                                    stats.criticalBuys.slice(0, 6).map((b, i) => (
-                                        <tr key={i} className="hover:bg-nexus-700/20 transition-colors cursor-pointer group" onClick={() => setSelectedBuyingDetail(b)}>
-                                            <td className="px-8 py-6 font-bold text-white text-lg">
-                                                <div className="flex items-center gap-2">
-                                                    {b.projeto} <Eye size={14} className="opacity-0 group-hover:opacity-50 text-blue-400" />
-                                                </div>
-                                                <span className="block text-xs font-mono text-nexus-500">{b.numeroProjeto}</span>
-                                            </td>
-                                            <td className="px-8 py-6 text-red-400 font-medium">{b.aComprar}</td>
-                                            <td className="px-8 py-6 font-black text-white italic">{b.dataDisponivel}</td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={3} className="px-8 py-20 text-center text-nexus-500 font-bold">Nenhuma compra em estado crítico identificada.</td>
+
+                    <div className="grid grid-cols-4 gap-6">
+                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Total Mapeado</p>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-5xl font-black text-white">{stats.buyingTotal}</h3>
+                                <Package className="text-blue-500" size={32} />
+                            </div>
+                        </div>
+                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Padrão</p>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-5xl font-black text-green-500">{stats.standardBuys.length}</h3>
+                                <CheckCircle className="text-green-500" size={32} />
+                            </div>
+                        </div>
+                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Intermediário</p>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-5xl font-black text-yellow-500">{stats.intermediateBuys.length}</h3>
+                                <Clock className="text-yellow-500" size={32} />
+                            </div>
+                        </div>
+                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
+                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Crítico</p>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-5xl font-black text-red-500">{stats.criticalBuys.length}</h3>
+                                <AlertTriangle className="text-red-500" size={32} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-nexus-800/50 rounded-3xl border border-nexus-700 overflow-hidden shadow-2xl flex-1">
+                        <div className="overflow-y-auto max-h-[400px] custom-scrollbar">
+                            <table className="w-full text-left">
+                                <thead className="bg-nexus-900/80 sticky top-0 z-10">
+                                    <tr className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">
+                                        <th className="px-8 py-6">Projeto</th>
+                                        <th className="px-8 py-6">Criticidade</th>
+                                        <th className="px-8 py-6">Materiais Pendentes</th>
+                                        <th className="px-8 py-6">Data Disponível</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-nexus-800">
+                                    {buyingStatus.length > 0 ? (
+                                        buyingStatus.map((b, i) => {
+                                            const isCritico = b.status === 'Crítico';
+                                            const isIntermediario = b.status === 'Intermediário';
+                                            const colorClass = isCritico ? 'text-red-400' : isIntermediario ? 'text-yellow-400' : 'text-green-400';
+                                            const badgeClass = isCritico ? 'bg-red-500' : isIntermediario ? 'bg-yellow-500 text-black' : 'bg-green-500';
+
+                                            return (
+                                                <tr key={i} className="hover:bg-nexus-700/20 transition-colors cursor-pointer group" onClick={() => setSelectedBuyingDetail(b)}>
+                                                    <td className="px-8 py-6 font-bold text-white text-lg">
+                                                        <div className="flex items-center gap-2">
+                                                            {b.projeto} <Eye size={14} className="opacity-0 group-hover:opacity-50 text-blue-400" />
+                                                        </div>
+                                                        <span className="block text-xs font-mono text-nexus-500">{b.numeroProjeto}</span>
+                                                    </td>
+                                                    <td className="px-8 py-6">
+                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeClass}`}>
+                                                            {b.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className={`px-8 py-6 font-medium ${colorClass}`}>{b.aComprar}</td>
+                                                    <td className="px-8 py-6 font-black text-white italic">{b.dataDisponivel}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={4} className="px-8 py-20 text-center text-nexus-500 font-bold">Nenhum dado de compras identificado.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <p className="text-xs text-nexus-500 font-bold uppercase text-center italic opacity-50">Clique em um projeto para ver o detalhamento completo de materiais</p>
+                    <p className="text-xs text-nexus-500 font-bold uppercase text-center italic opacity-50">Clique em qualquer projeto para ver o detalhamento completo de materiais</p>
                 </div>
             );
         }
@@ -950,45 +1072,10 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
                     {/* Modal Detalhes Compras */}
                     {selectedBuyingDetail && (
-                        <div className="fixed inset-0 bg-black/90 z-[1010] flex items-center justify-center p-8 backdrop-blur-xl animate-fadeIn" onClick={() => setSelectedBuyingDetail(null)}>
-                            <div className="bg-nexus-800 border-2 border-red-500/50 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                                <div className="bg-red-600 p-6 flex justify-between items-center text-white">
-                                    <div className="flex items-center gap-3">
-                                        <AlertTriangle size={32} />
-                                        <div>
-                                            <h3 className="font-black text-2xl uppercase italic">Analise de Criticidade</h3>
-                                            <p className="text-xs font-bold text-white/70 uppercase">Detalhes da Cadeia de Suprimentos</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => setSelectedBuyingDetail(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={32}/></button>
-                                </div>
-                                <div className="p-10 space-y-6">
-                                    <div>
-                                        <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Projeto</label>
-                                        <h4 className="text-3xl font-black text-white mt-1">{selectedBuyingDetail.projeto}</h4>
-                                        <p className="text-nexus-400 font-mono text-lg tracking-tighter">ID: {selectedBuyingDetail.numeroProjeto}</p>
-                                    </div>
-                                    <div className="bg-nexus-900 p-6 rounded-2xl border border-nexus-700">
-                                        <label className="text-xs font-black text-red-500 uppercase flex items-center gap-2"><ShoppingCart size={14} /> Materiais a Comprar</label>
-                                        <p className="text-white text-xl mt-3 font-medium">{selectedBuyingDetail.aComprar}</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="bg-nexus-900 p-4 rounded-xl border border-nexus-700">
-                                            <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Comprados</label>
-                                            <p className="text-nexus-300 text-lg font-bold">{selectedBuyingDetail.comprados}</p>
-                                        </div>
-                                        <div className="bg-nexus-900 p-4 rounded-xl border border-nexus-700">
-                                            <label className="text-xs font-black text-nexus-500 uppercase tracking-widest">Entregues</label>
-                                            <p className="text-nexus-300 text-lg font-bold">{selectedBuyingDetail.entregue}</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-blue-600/10 p-6 rounded-xl border border-blue-500/20">
-                                        <label className="text-xs font-black text-blue-400 uppercase">Data Disponível</label>
-                                        <p className="text-white text-3xl font-black italic">{selectedBuyingDetail.dataDisponivel}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <BuyingDetailModal 
+                            project={selectedBuyingDetail} 
+                            onClose={() => setSelectedBuyingDetail(null)} 
+                        />
                     )}
 
                     {/* Footer Slide */}
