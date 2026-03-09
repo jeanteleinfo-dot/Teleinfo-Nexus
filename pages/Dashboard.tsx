@@ -4,6 +4,7 @@ import { Sidebar } from '../components/Sidebar';
 import { TeleinfoReport } from '../modules/TeleinfoReport';
 import { StockManager } from '../modules/StockManager';
 import { TeleinfoManager } from '../modules/TeleinfoManager';
+import { OperationalScale } from '../modules/OperationalScale';
 import { UserManagement } from '../modules/UserManagement';
 import { AppModule, UserRole, DetailedProject, ProjectBuyingStatus } from '../types';
 import { 
@@ -177,6 +178,7 @@ export const Dashboard: React.FC = () => {
       case AppModule.TELEINFO_REPORT: return <TeleinfoReport />;
       case AppModule.STOCK_MONITOR: return <StockManager />;
       case AppModule.TELEINFO_MANAGER: return <TeleinfoManager />;
+      case AppModule.OPERATIONAL_SCALE: return <OperationalScale />;
       case AppModule.USER_MANAGEMENT: return <UserManagement />;
       case AppModule.DASHBOARD:
       default:

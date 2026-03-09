@@ -19,6 +19,7 @@ export enum AppModule {
   TELEINFO_REPORT = 'teleinfo_report',
   STOCK_MONITOR = 'stock_monitor',
   TELEINFO_MANAGER = 'teleinfo_manager',
+  OPERATIONAL_SCALE = 'operational_scale',
   USER_MANAGEMENT = 'user_management',
 }
 
@@ -181,7 +182,62 @@ export interface ManagerProject {
 export interface Employee {
   id: string;
   name: string;
+  shortName: string;
   role: string;
+  active: boolean;
+  phone: string;
+  internalDoc: string;
+  team: string; // BU
+  observations: string;
+  canDrive: boolean;
+  canActAlone: boolean;
+  restrictions: string;
+  rg?: string; // Visible only to admin
+  cpf?: string; // Visible only to admin
+}
+
+export interface WorkContract {
+  id: string;
+  name: string;
+  client: string;
+  costCenter: string;
+  address: string;
+  unit: string; // Unit/Block/Regional
+  type: string; // implantação, manutenção, etc.
+  status: 'Ativa' | 'Concluída' | 'Pausada';
+  standardTime: string;
+  standardLocation: 'No Cliente' | 'Teleinfo' | 'Outro';
+  observations: string;
+}
+
+export interface FleetVehicle {
+  id: string;
+  brand: string;
+  model: string;
+  color: string;
+  plate: string;
+  status: 'Disponível' | 'Em Uso' | 'Manutenção';
+  observations: string;
+}
+
+export interface ToolResource {
+  id: string;
+  name: string;
+  quantity: number;
+  location: string; // Contract/Location
+  status: 'Disponível' | 'Em Uso' | 'Manutenção';
+  observations: string;
+}
+
+export type AbsenceType = 'Férias' | 'Atestado' | 'Folga' | 'Treinamento' | 'Afastamento' | 'Indisponível';
+
+export interface Absence {
+  id: string;
+  employeeId: string;
+  type: AbsenceType;
+  startDate: string;
+  endDate: string;
+  observations: string;
 }
 
 export interface Schedule {
@@ -195,13 +251,25 @@ export interface Schedule {
   endTime: string;
 }
 
-export type AbsenceType = 'Férias' | 'Atestado Médico' | 'Treinamento' | 'Troca de Turno' | 'Integração' | 'Falta' | 'Abonar';
-
-export interface Absence {
+export interface DailyScale {
   id: string;
+  date: string;
   employeeId: string;
-  type: AbsenceType;
-  startDate: string;
-  endDate: string;
-  reason?: string;
+  workId: string;
+  // Auto-filled from workId but can be overridden
+  client: string;
+  costCenter: string;
+  address: string;
+  time: string;
+  location: string;
+  
+  vehicleId?: string;
+  toolIds: string[];
+  observations: string;
+  status: 'Escalado' | 'Férias' | 'Atestado' | 'Folga' | 'Treinamento' | 'Indisponível';
+  
+  // History tracking
+  updatedBy?: string;
+  updatedAt?: string;
+  history?: string; // JSON string of changes
 }

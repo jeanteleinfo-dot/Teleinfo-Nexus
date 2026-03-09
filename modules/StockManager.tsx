@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { ProjectBuyingStatus } from '../types';
 import { 
-  Package, UploadCloud, AlertTriangle, CheckCircle, Clock, X, ShoppingCart, Trash2, Info, Eye
+  Package, UploadCloud, AlertTriangle, CheckCircle, Clock, X, ShoppingCart, Trash2, Info, Eye, Calendar
 } from 'lucide-react';
 import { supabase, syncToSupabase, fetchFromSupabase } from '../services/supabase';
 
@@ -132,61 +132,79 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
     </div>
 );
 
-const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void }> = ({ project, onClose }) => (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-nexus-800 border-2 border-red-500/50 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-            <div className="bg-red-600 p-4 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2 text-white">
-                    <AlertTriangle size={24} />
-                    <h3 className="font-bold text-lg">Detalhes Críticos do Projeto</h3>
-                </div>
-                <button onClick={onClose} className="text-white/80 hover:text-white"><X size={24}/></button>
-            </div>
-            
-            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                        <label className="text-[10px] uppercase font-bold text-nexus-500">Título do Projeto</label>
-                        <p className="text-lg font-bold text-white">{project.projeto}</p>
-                    </div>
-                    <div>
-                        <label className="text-[10px] uppercase font-bold text-nexus-500">Nº CC / Projeto</label>
-                        <p className="text-white font-mono">{project.numeroProjeto}</p>
-                    </div>
-                    <div>
-                        <label className="text-[10px] uppercase font-bold text-nexus-500">Criticidade</label>
-                        <span className="block w-fit bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded mt-1">CRÍTICO</span>
-                    </div>
-                </div>
+const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void }> = ({ project, onClose }) => {
+    const isCritico = project.status === 'Crítico';
+    const isIntermediario = project.status === 'Intermediário';
+    
+    const colorConfig = isCritico 
+        ? { border: 'border-red-500/50', bg: 'bg-red-600', text: 'text-red-400', icon: AlertTriangle }
+        : isIntermediario 
+        ? { border: 'border-yellow-500/50', bg: 'bg-yellow-600', text: 'text-yellow-400', icon: Clock }
+        : { border: 'border-green-500/50', bg: 'bg-green-600', text: 'text-green-400', icon: CheckCircle };
 
-                <div className="border-t border-nexus-700 pt-4 grid grid-cols-1 gap-4">
-                    <div className="bg-nexus-900 p-4 rounded-lg border border-nexus-700">
-                        <label className="text-[10px] uppercase font-bold text-nexus-400">Materiais a Comprar</label>
-                        <p className="text-red-400 text-sm mt-2 font-medium whitespace-pre-wrap leading-relaxed">{project.aComprar}</p>
+    const Icon = colorConfig.icon;
+
+    return (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+            <div className={`bg-nexus-800 border-2 ${colorConfig.border} rounded-3xl w-full max-w-4xl shadow-2xl animate-slideUp overflow-hidden flex flex-col max-h-[90vh]`} onClick={e => e.stopPropagation()}>
+                <div className={`${colorConfig.bg} p-5 flex justify-between items-center shrink-0`}>
+                    <div className="flex items-center gap-3 text-white">
+                        <Icon size={24} />
+                        <h3 className="font-bold text-lg uppercase tracking-tight">Detalhes Críticos do Projeto</h3>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div className="bg-nexus-900 p-4 rounded-lg border border-nexus-700">
-                            <label className="text-[10px] uppercase font-bold text-nexus-400">Já Comprados</label>
-                            <p className="text-nexus-200 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{project.comprados}</p>
+                    <button onClick={onClose} className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"><X size={24}/></button>
+                </div>
+                
+                <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-1 block">Título do Projeto</label>
+                            <p className="text-2xl font-black text-white leading-tight">{project.projeto}</p>
                         </div>
-                        <div className="bg-nexus-900 p-4 rounded-lg border border-nexus-700">
-                            <label className="text-[10px] uppercase font-bold text-nexus-400">Entregues</label>
-                            <p className="text-nexus-200 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{project.entregue}</p>
+                        <div>
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-1 block">Nº CC / Projeto</label>
+                            <p className="text-lg text-white font-mono font-bold bg-nexus-900/50 px-3 py-1 rounded-lg border border-nexus-700 inline-block">{project.numeroProjeto}</p>
+                        </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-1 block">Criticidade</label>
+                            <span className={`inline-block ${colorConfig.bg} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-sm`}>
+                                {project.status}
+                            </span>
                         </div>
                     </div>
-                    <div className="bg-blue-600/10 p-4 rounded-lg border border-blue-500/30">
-                        <label className="text-[10px] uppercase font-bold text-blue-400">Data Disponível p/ Cliente</label>
-                        <p className="text-white text-sm mt-1 font-bold">{project.dataDisponivel}</p>
+
+                    <div className="border-t border-nexus-700 pt-6 grid grid-cols-1 gap-6">
+                        <div className="bg-nexus-900/80 p-6 rounded-2xl border border-nexus-700">
+                            <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Materiais a Comprar</label>
+                            <p className={`text-lg font-bold whitespace-pre-wrap leading-relaxed ${isCritico ? 'text-red-400' : 'text-white'}`}>{project.aComprar}</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             <div className="bg-nexus-900/40 p-6 rounded-2xl border border-nexus-700">
+                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Já Comprados</label>
+                                <p className="text-nexus-200 text-sm whitespace-pre-wrap leading-relaxed">{project.comprados}</p>
+                            </div>
+                            <div className="bg-nexus-900/40 p-6 rounded-2xl border border-nexus-700">
+                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Entregues</label>
+                                <p className="text-nexus-200 text-sm whitespace-pre-wrap leading-relaxed">{project.entregue}</p>
+                            </div>
+                        </div>
+                        <div className="bg-blue-600/10 p-5 rounded-2xl border border-blue-500/30 flex items-center justify-between">
+                            <div>
+                                <label className="text-[10px] uppercase font-black text-blue-400 tracking-widest mb-1 block">Data Disponível p/ Cliente</label>
+                                <p className="text-white text-lg font-black italic">{project.dataDisponivel}</p>
+                            </div>
+                            <Calendar className="text-blue-500 opacity-50" size={32} />
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div className="bg-nexus-900 p-4 border-t border-nexus-700 flex justify-end shrink-0">
-                <button onClick={onClose} className="px-6 py-2 bg-nexus-700 text-white rounded-lg hover:bg-nexus-600 transition-colors font-bold text-sm">Fechar</button>
+                
+                <div className="bg-nexus-900 p-5 border-t border-nexus-700 flex justify-end shrink-0">
+                    <button onClick={onClose} className="px-8 py-2.5 bg-nexus-700 text-white rounded-xl hover:bg-nexus-600 transition-all font-black text-xs uppercase tracking-widest">Fechar Detalhes</button>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 // --- MAIN VIEW ---
 

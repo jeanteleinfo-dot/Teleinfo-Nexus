@@ -1,4 +1,5 @@
 
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://cktbrxwgqrtgvrbxuqzs.supabase.co';
@@ -48,3 +49,28 @@ export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | nul
     return null;
   }
 };
+
+/**
+ * Hook para persistência no Supabase
+ */
+export function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>, () => void] {
+    const [storedValue, setStoredValue] = useState<T>(initialValue);
+
+    const load = async () => {
+        const data = await fetchFromSupabase<any>(tableName);
+        if (data && data.length > 0) setStoredValue(data as unknown as T);
+        else if (data && data.length === 0) setStoredValue([] as unknown as T);
+    };
+
+    useEffect(() => {
+        load();
+    }, [tableName]);
+
+    const setValue = (value: T | ((val: T) => T)) => {
+        const val = value instanceof Function ? value(storedValue) : value;
+        setStoredValue(val);
+        if (Array.isArray(val)) syncToSupabase(tableName, val);
+    };
+
+    return [storedValue, setValue, load];
+}

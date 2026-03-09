@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AppModule, UserRole } from '../types';
-import { LayoutDashboard, FileText, Package, Server, LogOut, Shield, Users } from 'lucide-react';
+import { LayoutDashboard, FileText, Package, Server, LogOut, Shield, Users, Calendar } from 'lucide-react';
 
 interface SidebarProps {
   currentModule: AppModule;
@@ -17,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentModule, onNavigate, isO
     { id: AppModule.DASHBOARD, label: 'Visão Geral', icon: LayoutDashboard, role: null }, // null role = all
     { id: AppModule.TELEINFO_REPORT, label: 'Relatórios IA', icon: FileText, role: null },
     { id: AppModule.STOCK_MONITOR, label: 'Estoque & Compras', icon: Package, role: null },
+    { id: AppModule.OPERATIONAL_SCALE, label: 'Escala Operacional', icon: Calendar, role: null },
     { id: AppModule.TELEINFO_MANAGER, label: 'Teleinfo Manager', icon: Server, role: UserRole.ADMIN },
     { id: AppModule.USER_MANAGEMENT, label: 'Gestão de Usuários', icon: Users, role: UserRole.ADMIN },
   ];
