@@ -8,7 +8,7 @@ import {
   Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity,
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
   History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
-  FileSearch, Loader2, Package, CheckCircle
+  FileSearch, Loader2, Package, CheckCircle, Info
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
@@ -326,7 +326,7 @@ const MonitoringView: React.FC<MonitoringProps> = ({ onGenerateAiReport, isGener
                         <Activity className="text-green-400" /> Auditoria Detalhada de Obras
                     </h3>
                     <button onClick={() => { 
-                        setEditingProject({ id: '', name: '', bu: '', start: '', end: '', costCenter: '', steps: [], soldHours: {infra:0,sse:0,ti:0,aut:0}, usedHours: {infra:0,sse:0,ti:0,aut:0} }); 
+                        setEditingProject({ id: '', name: '', bu: '', start: '', end: '', costCenter: '', steps: [], soldHours: {infra:0,sse:0,ti:0,aut:0}, usedHours: {infra:0,sse:0,ti:0,aut:0}, observations: '' }); 
                         setViewMode('form'); 
                     }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-blue-900/40 active:scale-95 transition-all">
                         <Plus size={18} /> Novo Projeto
@@ -353,7 +353,10 @@ const MonitoringView: React.FC<MonitoringProps> = ({ onGenerateAiReport, isGener
                                 
                                 <div className="flex justify-between items-start mb-4">
                                     <div>
-                                        <h4 className="text-white font-bold text-lg">{p.name}</h4>
+                                        <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                                            {p.name}
+                                            {p.observations && <Info size={14} className="text-blue-400 opacity-70" />}
+                                        </h4>
                                         <div className="flex items-center gap-3 mt-1">
                                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-nexus-900 text-nexus-400 border border-nexus-700">CC: {p.costCenter}</span>
                                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border" style={{ borderColor: getBuColor(p.bu || ''), color: getBuColor(p.bu || '') }}>{p.bu || 'GERAL'}</span>
@@ -494,6 +497,16 @@ const MonitoringView: React.FC<MonitoringProps> = ({ onGenerateAiReport, isGener
                                        onChange={e => setEditingProject({...editingProject!, end: e.target.value})} 
                                        className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                             </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-nexus-500 font-bold uppercase">Observações para Auditoria IA</label>
+                            <textarea 
+                                placeholder="Descreva detalhes relevantes, atrasos, justificativas ou pontos de atenção para a IA analisar..." 
+                                value={editingProject?.observations || ''} 
+                                onChange={e => setEditingProject({...editingProject!, observations: e.target.value})} 
+                                rows={4}
+                                className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none transition-all resize-none text-sm"
+                            />
                         </div>
                     </div>
                 </div>
@@ -637,8 +650,8 @@ const BuyingDetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () =>
 
     return (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4 backdrop-blur-md" onClick={onClose}>
-            <div className={`bg-nexus-800 border-2 border-${color}-500/50 rounded-3xl w-full max-w-2xl shadow-2xl animate-fadeIn overflow-hidden`} onClick={e => e.stopPropagation()}>
-                <div className={`bg-${color}-600 p-6 flex justify-between items-center`}>
+            <div className={`bg-nexus-800 border-2 border-${color}-500/50 rounded-3xl w-full max-w-4xl shadow-2xl animate-fadeIn overflow-hidden flex flex-col max-h-[90vh]`} onClick={e => e.stopPropagation()}>
+                <div className={`bg-${color}-600 p-6 flex justify-between items-center shrink-0`}>
                     <div className="flex items-center gap-3 text-white">
                         <Icon size={32} />
                         <div>
@@ -649,7 +662,7 @@ const BuyingDetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () =>
                     <button onClick={onClose} className="text-white/80 hover:text-white bg-white/10 p-2 rounded-full transition-colors"><X size={28}/></button>
                 </div>
                 
-                <div className="p-8 space-y-8">
+                <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
                     <div className="grid grid-cols-2 gap-8">
                         <div className="col-span-2">
                             <label className="text-[10px] uppercase font-black text-nexus-500 tracking-widest mb-2 block">Título do Projeto</label>
@@ -668,22 +681,22 @@ const BuyingDetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () =>
                     <div className="grid grid-cols-1 gap-6">
                         <div className="bg-nexus-900/50 p-6 rounded-2xl border border-nexus-700">
                             <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Materiais a Comprar</label>
-                            <p className={`text-xl font-bold ${isCritico ? 'text-red-400' : 'text-white'}`}>{project.aComprar}</p>
+                            <p className={`text-xl font-bold whitespace-pre-wrap leading-relaxed ${isCritico ? 'text-red-400' : 'text-white'}`}>{project.aComprar}</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div className="bg-nexus-900/50 p-6 rounded-2xl border border-nexus-700">
                                 <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Já Comprados</label>
-                                <p className="text-white text-lg font-bold">{project.comprados}</p>
+                                <p className="text-white text-lg font-bold whitespace-pre-wrap leading-relaxed">{project.comprados}</p>
                             </div>
                             <div className="bg-nexus-900/50 p-6 rounded-2xl border border-nexus-700">
                                 <label className="text-[10px] uppercase font-black text-nexus-400 tracking-widest mb-3 block">Entregues</label>
-                                <p className="text-white text-lg font-bold">{project.entregue}</p>
+                                <p className="text-white text-lg font-bold whitespace-pre-wrap leading-relaxed">{project.entregue}</p>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div className="bg-nexus-900 p-6 border-t border-nexus-700 flex justify-end">
+                <div className="bg-nexus-900 p-6 border-t border-nexus-700 flex justify-end shrink-0">
                     <button onClick={onClose} className="px-10 py-3 bg-nexus-700 text-white rounded-xl hover:bg-nexus-600 transition-all font-black text-sm uppercase tracking-widest">Fechar Detalhes</button>
                 </div>
             </div>

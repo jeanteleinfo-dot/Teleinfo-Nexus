@@ -91,6 +91,7 @@ export interface DetailedProject {
     soldHours: BuHours;
     usedHours: BuHours;
     productionData?: ProductionData[];
+    observations?: string;
 }
 
 export interface KeyFact {

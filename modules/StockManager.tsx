@@ -39,22 +39,55 @@ function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispa
 const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
     // Remove BOM se existir
     if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    const result: ProjectBuyingStatus[] = [];
     
-    if (lines.length < 2) return [];
+    // Parser robusto para CSV que lida com aspas e quebras de linha dentro de campos
+    const parseCSVLine = (text: string, separator: string) => {
+        const result = [];
+        let cur = '';
+        let inQuote = false;
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            const next = text[i + 1];
+            if (char === '"' && inQuote && next === '"') {
+                cur += '"';
+                i++;
+            } else if (char === '"') {
+                inQuote = !inQuote;
+            } else if (char === separator && !inQuote) {
+                result.push(cur);
+                cur = '';
+            } else if ((char === '\r' || char === '\n') && !inQuote) {
+                if (cur || result.length > 0) {
+                    result.push(cur);
+                    return { fields: result, nextIndex: i + (char === '\r' && next === '\n' ? 2 : 1) };
+                }
+            } else {
+                cur += char;
+            }
+        }
+        result.push(cur);
+        return { fields: result, nextIndex: text.length };
+    };
 
-    // Detectar separador (preferência por ponto e vírgula comum no Brasil)
-    const header = lines[0];
-    const sep = header.includes(';') ? ';' : ',';
+    // Detectar separador
+    const firstLine = text.split('\n')[0];
+    const sep = firstLine.includes(';') ? ';' : ',';
     
-    // Esperado: Título; Nº Projeto; Criticidade; A Comprar; Comprado; Entregue; Data disponivel
-    for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
-        if (cols.length < 3) continue;
+    const result: ProjectBuyingStatus[] = [];
+    let index = 0;
+    let lineCount = 0;
+    
+    while (index < text.length) {
+        const { fields, nextIndex } = parseCSVLine(text.substring(index), sep);
+        index += nextIndex;
         
-        const rawStatus = cols[2] || 'Padrão';
-        const aComprar = cols[3] || '-';
+        if (fields.length < 3 || lineCount === 0) {
+            lineCount++;
+            continue;
+        }
+
+        const rawStatus = fields[2] || 'Padrão';
+        const aComprar = fields[3] || '-';
         
         let status: 'Padrão' | 'Intermediário' | 'Crítico' = 'Padrão';
         const s = rawStatus.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -64,9 +97,6 @@ const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
         } else if (s.includes('intermediario') || s.includes('media') || s.includes('atencao') || s.includes('alerta')) {
             status = 'Intermediário';
         } else if (aComprar !== '-' && aComprar.trim() !== '' && aComprar.toLowerCase() !== 'nenhum' && status === 'Padrão') {
-            // Se tem algo a comprar e não foi marcado explicitamente, marcamos como Crítico se houver texto relevante
-            // ou Intermediário por padrão. Para garantir o "vermelho" que o usuário pediu, vamos ser mais agressivos
-            // se o texto de 'aComprar' parecer urgente.
             const a = aComprar.toLowerCase();
             if (a.includes('urgente') || a.includes('pendente') || a.includes('atraso')) {
                 status = 'Crítico';
@@ -76,15 +106,16 @@ const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
         }
         
         result.push({
-            id: `buy-${i}-${Date.now()}`,
-            projeto: cols[0] || 'N/A',
-            numeroProjeto: cols[1] || 'N/A',
+            id: `buy-${lineCount}-${Date.now()}`,
+            projeto: fields[0] || 'N/A',
+            numeroProjeto: fields[1] || 'N/A',
             status: status,
             aComprar: aComprar,
-            comprados: cols[4] || '-',
-            entregue: cols[5] || '-',
-            dataDisponivel: cols[6] || 'A definir',
+            comprados: fields[4] || '-',
+            entregue: fields[5] || '-',
+            dataDisponivel: fields[6] || 'A definir',
         });
+        lineCount++;
     }
     return result;
 };
@@ -103,8 +134,8 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
 
 const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void }> = ({ project, onClose }) => (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={onClose}>
-        <div className="bg-nexus-800 border-2 border-red-500/50 rounded-2xl w-full max-w-lg shadow-2xl animate-fadeIn overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="bg-red-600 p-4 flex justify-between items-center">
+        <div className="bg-nexus-800 border-2 border-red-500/50 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-red-600 p-4 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 text-white">
                     <AlertTriangle size={24} />
                     <h3 className="font-bold text-lg">Detalhes Críticos do Projeto</h3>
@@ -112,7 +143,7 @@ const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void 
                 <button onClick={onClose} className="text-white/80 hover:text-white"><X size={24}/></button>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
                         <label className="text-[10px] uppercase font-bold text-nexus-500">Título do Projeto</label>
@@ -129,28 +160,28 @@ const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void 
                 </div>
 
                 <div className="border-t border-nexus-700 pt-4 grid grid-cols-1 gap-4">
-                    <div className="bg-nexus-900 p-3 rounded-lg border border-nexus-700">
+                    <div className="bg-nexus-900 p-4 rounded-lg border border-nexus-700">
                         <label className="text-[10px] uppercase font-bold text-nexus-400">Materiais a Comprar</label>
-                        <p className="text-red-400 text-sm mt-1 font-medium">{project.aComprar}</p>
+                        <p className="text-red-400 text-sm mt-2 font-medium whitespace-pre-wrap leading-relaxed">{project.aComprar}</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                         <div className="bg-nexus-900 p-3 rounded-lg border border-nexus-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div className="bg-nexus-900 p-4 rounded-lg border border-nexus-700">
                             <label className="text-[10px] uppercase font-bold text-nexus-400">Já Comprados</label>
-                            <p className="text-nexus-200 text-sm mt-1">{project.comprados}</p>
+                            <p className="text-nexus-200 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{project.comprados}</p>
                         </div>
-                        <div className="bg-nexus-900 p-3 rounded-lg border border-nexus-700">
+                        <div className="bg-nexus-900 p-4 rounded-lg border border-nexus-700">
                             <label className="text-[10px] uppercase font-bold text-nexus-400">Entregues</label>
-                            <p className="text-nexus-200 text-sm mt-1">{project.entregue}</p>
+                            <p className="text-nexus-200 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{project.entregue}</p>
                         </div>
                     </div>
-                    <div className="bg-blue-600/10 p-3 rounded-lg border border-blue-500/30">
+                    <div className="bg-blue-600/10 p-4 rounded-lg border border-blue-500/30">
                         <label className="text-[10px] uppercase font-bold text-blue-400">Data Disponível p/ Cliente</label>
                         <p className="text-white text-sm mt-1 font-bold">{project.dataDisponivel}</p>
                     </div>
                 </div>
             </div>
             
-            <div className="bg-nexus-900 p-4 border-t border-nexus-700 flex justify-end">
+            <div className="bg-nexus-900 p-4 border-t border-nexus-700 flex justify-end shrink-0">
                 <button onClick={onClose} className="px-6 py-2 bg-nexus-700 text-white rounded-lg hover:bg-nexus-600 transition-colors font-bold text-sm">Fechar</button>
             </div>
         </div>
@@ -311,7 +342,7 @@ const ProjectBuyingStatusView: React.FC = () => {
                                                     {item.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-5 text-nexus-200">{item.aComprar}</td>
+                                            <td className="px-6 py-5 text-nexus-200 max-w-xs truncate" title={item.aComprar}>{item.aComprar}</td>
                                             <td className="px-6 py-5 font-bold">{item.dataDisponivel}</td>
                                         </tr>
                                     );

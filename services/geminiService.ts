@@ -148,6 +148,9 @@ Infraestrutura: Vendida = ${project.soldHours.infra} | Utilizada = ${project.use
 Segurança (SEC): Vendida = ${project.soldHours.sse} | Utilizada = ${project.usedHours.sse}
 Tecnologia (TI): Vendida = ${project.soldHours.ti} | Utilizada = ${project.usedHours.ti}
 
+Observações e Pontos de Atenção (Informados pela Equipe):
+${project.observations || 'Nenhuma observação adicional informada.'}
+
 Sua Tarefa:
 Analise os dados fornecidos e gere um Relatório de Auditoria estruturado em formato Markdown, contendo obrigatoriamente as seguintes seções:
 
