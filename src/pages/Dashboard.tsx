@@ -214,10 +214,12 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-nexus-900 overflow-hidden">
-      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />}
-      <Sidebar currentModule={currentModule} onNavigate={(mod) => { setCurrentModule(mod); if (window.innerWidth < 768) setSidebarOpen(false); }} isOpen={sidebarOpen} />
+      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm no-print" onClick={() => setSidebarOpen(false)} />}
+      <div className="no-print">
+        <Sidebar currentModule={currentModule} onNavigate={(mod) => { setCurrentModule(mod); if (window.innerWidth < 768) setSidebarOpen(false); }} isOpen={sidebarOpen} />
+      </div>
       <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-        <header className="h-16 flex items-center justify-between px-6 border-b border-nexus-700 bg-nexus-900/95 backdrop-blur shrink-0 z-20">
+        <header className="h-16 flex items-center justify-between px-6 border-b border-nexus-700 bg-nexus-900/95 backdrop-blur shrink-0 z-20 no-print">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-nexus-400 hover:bg-nexus-800 rounded-xl transition-all"><Menu size={24} /></button>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">

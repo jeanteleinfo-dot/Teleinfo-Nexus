@@ -236,11 +236,42 @@ export const OperationalScale: React.FC = () => {
     alert(`${newScales.length} escalas copiadas para ${selectedDate}.`);
   };
 
+  const formatDateBR = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } else {
+        // Fallback for non-secure contexts or if navigator.clipboard is unavailable
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return successful;
+      }
+    } catch (err) {
+      console.error('Falha ao copiar:', err);
+      return false;
+    }
+  };
+
   const generateWhatsAppMessage = (date: string) => {
     const dayScales = scales.filter(s => s.date === date);
     if (dayScales.length === 0) return "";
 
-    let message = `*ESCALA DO DIA ${new Date(date).toLocaleDateString('pt-BR')}*\n\n`;
+    let message = `*ESCALA DO DIA ${formatDateBR(date)}*\n\n`;
 
     // Group by work
     const grouped = dayScales.reduce((acc, s) => {
@@ -281,36 +312,52 @@ export const OperationalScale: React.FC = () => {
     return message;
   };
 
-  const handleExportWhatsApp = () => {
+  const handleExportWhatsApp = async () => {
     const message = generateWhatsAppMessage(selectedDate);
     if (!message) {
       alert("Nenhuma escala para exportar.");
       return;
     }
     
-    // Copy to clipboard
-    navigator.clipboard.writeText(message).then(() => {
+    const success = await copyToClipboard(message);
+    if (success) {
       alert("Escala formatada copiada para a área de transferência!");
-    });
+      
+      // Optional: Open WhatsApp
+      if (confirm("Deseja abrir o WhatsApp agora?")) {
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      }
+    } else {
+      alert("Não foi possível copiar para a área de transferência. Verifique as permissões do navegador.");
+    }
   };
 
-  const handleExportWhatsAppSummary = () => {
+  const handleExportWhatsAppSummary = async () => {
     const dayScales = scales.filter(s => s.date === selectedDate);
     if (dayScales.length === 0) {
       alert("Nenhuma escala para exportar.");
       return;
     }
 
-    let message = `*RESUMO ESCALA ${new Date(selectedDate).toLocaleDateString('pt-BR')}*\n\n`;
+    let message = `*RESUMO ESCALA ${formatDateBR(selectedDate)}*\n\n`;
     dayScales.forEach(s => {
       const emp = employees.find(e => e.id === s.employeeId);
       const work = works.find(w => w.id === s.workId);
       message += `• ${emp?.name || 'N/A'}: ${work?.name || 'N/A'} - ${s.time}\n`;
     });
 
-    navigator.clipboard.writeText(message).then(() => {
+    const success = await copyToClipboard(message);
+    if (success) {
       alert("Resumo copiado para a área de transferência!");
-    });
+      
+      if (confirm("Deseja abrir o WhatsApp agora?")) {
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      }
+    } else {
+      alert("Não foi possível copiar para a área de transferência.");
+    }
   };
 
   const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -320,6 +367,8 @@ export const OperationalScale: React.FC = () => {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      delimiter: ";",
+      transformHeader: (header) => header.trim(),
       complete: (results) => {
         const importedData = results.data as any[];
         if (importedData.length === 0) {
@@ -328,24 +377,55 @@ export const OperationalScale: React.FC = () => {
         }
 
         const processedData = importedData.map(item => {
+          const mappedItem: any = {};
+          
+          if (registryTab === 'employees') {
+            // Mapping from user's specific CSV structure
+            mappedItem.name = item['NOME COMPLETO'] || item['Nome Completo'] || item.name;
+            mappedItem.shortName = item['NOME CURTO'] || item['Nome Curto'] || item.shortName || mappedItem.name;
+            mappedItem.role = item['CARGO / FUNÇÃO'] || item['CARGO / FUNÇÃO '] || item['Cargo'] || item.role;
+            mappedItem.team = item['EQUIPE / BU'] || item['Equipe'] || item.team;
+            mappedItem.active = true;
+            mappedItem.canDrive = false;
+            mappedItem.canActAlone = false;
+          } else if (registryTab === 'works') {
+            mappedItem.name = item['NOME DE OBRA'] || item.name;
+            mappedItem.client = item['CLIENTE'] || item.client;
+            mappedItem.costCenter = item['CENTRO DE CUSTO'] || item.costCenter;
+            mappedItem.address = item['ENDEREÇO COMPLETO'] || item.address;
+            mappedItem.standardTime = item['HORÁRIO PADRÃO'] || item.standardTime;
+            mappedItem.status = 'Ativa';
+          } else if (registryTab === 'fleet') {
+            mappedItem.model = item['MARCA / MODELO'] || item.model;
+            mappedItem.plate = item['PLACA'] || item.plate;
+            const rawStatus = item['SITUAÇÃO'] || item.status || 'Disponível';
+            mappedItem.status = rawStatus.includes('Disponivel') ? 'Disponível' : rawStatus;
+          }
+
           const base = {
             ...item,
-            id: item.id || `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            ...mappedItem,
+            id: item.id || mappedItem.id || `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           };
 
           // Specific field parsing to ensure types
           if (registryTab === 'employees') {
             return {
               ...base,
-              active: item.active === 'true' || item.active === '1' || item.active === true,
-              canDrive: item.canDrive === 'true' || item.canDrive === '1' || item.canDrive === true,
-              canActAlone: item.canActAlone === 'true' || item.canActAlone === '1' || item.canActAlone === true,
+              active: base.active === undefined ? true : (base.active === 'true' || base.active === '1' || base.active === true),
+              canDrive: base.canDrive === 'true' || base.canDrive === '1' || base.canDrive === true,
+              canActAlone: base.canActAlone === 'true' || base.canActAlone === '1' || base.canActAlone === true,
             };
           }
           if (registryTab === 'works') {
             return {
               ...base,
               requiredTeamSize: item.requiredTeamSize ? Number(item.requiredTeamSize) : undefined,
+            };
+          }
+          if (registryTab === 'fleet') {
+            return {
+              ...base,
             };
           }
           if (registryTab === 'tools') {
@@ -380,6 +460,35 @@ export const OperationalScale: React.FC = () => {
         alert("Erro ao processar o arquivo CSV.");
       }
     });
+  };
+
+  const handleDeleteRegistry = (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este registro?")) return;
+    
+    switch (registryTab) {
+      case 'employees':
+        setEmployees(prev => prev.filter(i => i.id !== id));
+        break;
+      case 'works':
+        setWorks(prev => prev.filter(i => i.id !== id));
+        break;
+      case 'fleet':
+        setFleet(prev => prev.filter(i => i.id !== id));
+        break;
+      case 'tools':
+        setTools(prev => prev.filter(i => i.id !== id));
+        break;
+    }
+  };
+
+  const handleDeleteScale = (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta escala?")) return;
+    setScales(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleDeleteAbsence = (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este registro de ausência?")) return;
+    setAbsences(prev => prev.filter(a => a.id !== id));
   };
 
   // --- RENDERERS ---
@@ -502,7 +611,10 @@ export const OperationalScale: React.FC = () => {
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
+                      <button 
+                        onClick={() => handleDeleteRegistry(item.id)}
+                        className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      >
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -563,7 +675,7 @@ export const OperationalScale: React.FC = () => {
         )}
 
         {/* Toolbar */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center no-print">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 bg-nexus-800 p-1 rounded-xl border border-nexus-700">
               <button 
@@ -654,7 +766,7 @@ export const OperationalScale: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar no-print">
           <button 
             onClick={() => {
               const yesterday = new Date(selectedDate);
@@ -740,7 +852,10 @@ export const OperationalScale: React.FC = () => {
                     >
                       <Edit2 size={12} />
                     </button>
-                    <button className="p-1.5 bg-nexus-900 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all">
+                    <button 
+                      onClick={() => handleDeleteScale(s.id)}
+                      className="p-1.5 bg-nexus-900 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                    >
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -766,42 +881,48 @@ export const OperationalScale: React.FC = () => {
                   const emp = employees.find(e => e.id === s.employeeId);
                   const work = works.find(w => w.id === s.workId);
                   return (
-                    <tr key={s.id} className="hover:bg-nexus-700/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-nexus-900 rounded-lg flex items-center justify-center font-black text-blue-500 text-xs">
-                            {emp?.name.charAt(0)}
-                          </div>
-                          <span className="text-white font-bold">{emp?.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-white font-medium">{work?.name}</p>
-                        <p className="text-[10px] text-nexus-500 uppercase font-black">{s.client}</p>
-                      </td>
-                      <td className="px-6 py-4 text-nexus-300">{s.time}</td>
-                      <td className="px-6 py-4 text-nexus-300">
-                        {s.vehicleId ? fleet.find(f => f.id === s.vehicleId)?.plate : '-'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${STATUS_COLORS[s.status]} text-white shadow-sm`}>
-                          {s.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => {
-                              setEditingScale(s);
-                              setIsEditingScale(true);
-                            }}
-                            className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        <tr key={s.id} className="hover:bg-nexus-700/30 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-nexus-900 rounded-lg flex items-center justify-center font-black text-blue-500 text-xs">
+                                {emp?.name.charAt(0)}
+                              </div>
+                              <span className="text-white font-bold">{emp?.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-white font-medium">{work?.name}</p>
+                            <p className="text-[10px] text-nexus-500 uppercase font-black">{s.client}</p>
+                          </td>
+                          <td className="px-6 py-4 text-nexus-300">{s.time}</td>
+                          <td className="px-6 py-4 text-nexus-300">
+                            {s.vehicleId ? fleet.find(f => f.id === s.vehicleId)?.plate : '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${STATUS_COLORS[s.status]} text-white shadow-sm`}>
+                              {s.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={() => {
+                                  setEditingScale(s);
+                                  setIsEditingScale(true);
+                                }}
+                                className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteScale(s.id)}
+                                className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                   );
                 })}
               </tbody>
@@ -929,7 +1050,7 @@ export const OperationalScale: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
         <div>
           <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
             <Calendar className="text-blue-500" /> Escala Operacional
@@ -1009,7 +1130,10 @@ export const OperationalScale: React.FC = () => {
                           <td className="px-6 py-4 text-nexus-300">{new Date(a.endDate).toLocaleDateString('pt-BR')}</td>
                           <td className="px-6 py-4 text-nexus-400 text-xs italic">{a.observations}</td>
                           <td className="px-6 py-4 text-right">
-                            <button className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors">
+                            <button 
+                              onClick={() => handleDeleteAbsence(a.id)}
+                              className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                            >
                               <Trash2 size={16} />
                             </button>
                           </td>

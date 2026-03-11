@@ -25,6 +25,41 @@
   }
 }
 
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .bg-nexus-900, .bg-nexus-800, .bg-nexus-700, .bg-nexus-95 {
+    background: white !important;
+    border-color: #eee !important;
+    box-shadow: none !important;
+  }
+  .text-white, .text-nexus-400, .text-nexus-300, .text-nexus-500 {
+    color: black !important;
+  }
+  .border, .border-b, .border-t, .border-nexus-700 {
+    border-color: #eee !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .max-w-7xl {
+    max-width: none !important;
+  }
+  /* Ensure charts are visible or hidden as needed */
+  .recharts-wrapper {
+    filter: grayscale(100%) contrast(150%);
+  }
+}
+
 /* Markdown Styles */
 .prose-invert {
   --tw-prose-body: #94a3b8;
