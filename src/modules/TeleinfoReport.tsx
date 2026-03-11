@@ -633,65 +633,67 @@ const BuyingDetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () =>
     const Icon = colorConfig.icon;
 
     return (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[1100] p-4 md:p-8 backdrop-blur-xl animate-fadeIn" onClick={onClose}>
-            <div className={`bg-nexus-800 border-2 ${colorConfig.border} rounded-[2rem] w-full max-w-5xl shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-slideUp overflow-hidden flex flex-col max-h-[95vh]`} onClick={e => e.stopPropagation()}>
-                <div className={`${colorConfig.bg} p-8 flex justify-between items-center shrink-0`}>
-                    <div className="flex items-center gap-4 text-white">
-                        <div className="bg-white/20 p-3 rounded-2xl">
-                            <Icon size={40} />
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[1100] p-4 md:p-8 backdrop-blur-3xl animate-fadeIn" onClick={onClose}>
+            <div className={`bg-nexus-800 border-2 ${colorConfig.border} rounded-[3rem] w-full max-w-7xl shadow-[0_0_100px_rgba(0,0,0,0.8)] animate-slideUp overflow-hidden flex flex-col h-[90vh]`} onClick={e => e.stopPropagation()}>
+                <div className={`${colorConfig.bg} p-10 flex justify-between items-center shrink-0`}>
+                    <div className="flex items-center gap-6 text-white">
+                        <div className="bg-white/20 p-5 rounded-3xl shadow-inner">
+                            <Icon size={56} />
                         </div>
                         <div>
-                            <h3 className="font-black text-3xl uppercase tracking-tighter leading-none">Detalhes Críticos de Suprimento</h3>
-                            <p className="text-white/80 text-xs font-black uppercase tracking-[0.2em] mt-2">Status: {project.status}</p>
+                            <h3 className="font-black text-5xl uppercase tracking-tighter leading-none">Análise Crítica de Suprimentos</h3>
+                            <p className="text-white/80 text-sm font-black uppercase tracking-[0.4em] mt-3">Nexus Intelligence • Status: {project.status}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-3 rounded-full transition-all active:scale-90"><X size={32}/></button>
+                    <button onClick={onClose} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-4 rounded-full transition-all active:scale-90"><X size={48}/></button>
                 </div>
                 
-                <div className="p-10 space-y-10 overflow-y-auto custom-scrollbar bg-nexus-800/50">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                        <div className="lg:col-span-2 space-y-2">
-                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] block">Título do Projeto</label>
-                            <p className="text-4xl font-black text-white leading-tight tracking-tight">{project.projeto}</p>
+                <div className="p-12 space-y-12 overflow-y-auto custom-scrollbar bg-nexus-800/50 flex-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                        <div className="lg:col-span-2 space-y-4">
+                            <label className="text-xs uppercase font-black text-nexus-500 tracking-[0.5em] block">Título do Projeto</label>
+                            <p className="text-6xl font-black text-white leading-tight tracking-tighter uppercase">{project.projeto}</p>
                         </div>
-                        <div className="space-y-6">
+                        <div className="space-y-8 bg-nexus-900/40 p-8 rounded-[2rem] border border-nexus-700">
                             <div>
-                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-2 block">Nº CC / Projeto</label>
-                                <p className="text-2xl text-white font-mono font-black bg-nexus-900/50 px-4 py-2 rounded-xl border border-nexus-700 inline-block">{project.numeroProjeto}</p>
+                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-3 block">Nº CC / Identificador</label>
+                                <p className="text-3xl text-white font-mono font-black bg-nexus-900 px-6 py-3 rounded-2xl border border-nexus-700 inline-block shadow-inner">{project.numeroProjeto}</p>
                             </div>
                             <div>
-                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-2 block">Data Disponível p/ Cliente</label>
-                                <p className="text-2xl text-blue-400 font-black italic flex items-center gap-2">
-                                    <Calendar size={20} /> {project.dataDisponivel}
+                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-3 block">Previsão de Disponibilidade</label>
+                                <p className={`text-3xl font-black italic flex items-center gap-3 ${project.dataDisponivel === 'A definir' ? 'text-red-500' : 'text-green-500'}`}>
+                                    <Calendar size={28} /> {project.dataDisponivel}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-8">
-                        <div className="bg-nexus-900/80 p-8 rounded-3xl border border-nexus-700 shadow-inner">
-                            <div className="flex items-center gap-3 mb-4">
+                    <div className="grid grid-cols-1 gap-10">
+                        <div className="bg-nexus-900/60 p-10 rounded-[2.5rem] border border-nexus-700 shadow-2xl relative">
+                            <div className="absolute top-0 left-10 -translate-y-1/2 bg-nexus-800 px-6 py-2 border border-nexus-700 rounded-full flex items-center gap-3">
                                 <ShoppingCart size={20} className={colorConfig.text} />
-                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-[0.3em]">Materiais a Comprar / Pendentes</label>
+                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-[0.3em]">Materiais Pendentes / A Comprar</label>
                             </div>
-                            <p className={`text-2xl font-bold whitespace-pre-wrap leading-relaxed ${isCritico ? 'text-red-400' : 'text-white'}`}>{project.aComprar}</p>
+                            <p className={`text-4xl font-bold whitespace-pre-wrap leading-relaxed ${isCritico ? 'text-red-400' : 'text-white'} pt-4`}>{project.aComprar || 'Nenhum material pendente mapeado.'}</p>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                             <div className="bg-nexus-900/40 p-8 rounded-3xl border border-nexus-700">
-                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-4 block">Já Comprados</label>
-                                <p className="text-white text-xl font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.comprados}</p>
-                            </div>
-                            <div className="bg-nexus-900/40 p-8 rounded-3xl border border-nexus-700">
-                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-4 block">Entregues na Obra</label>
-                                <p className="text-white text-xl font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.entregue}</p>
-                            </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                         <div className="bg-nexus-900/40 p-10 rounded-[2.5rem] border border-nexus-700 hover:border-nexus-600 transition-all">
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-6 block">Fluxo de Compras (Já Adquirido)</label>
+                            <p className="text-white text-2xl font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.comprados || 'Informação não disponível.'}</p>
+                        </div>
+                        <div className="bg-nexus-900/40 p-10 rounded-[2.5rem] border border-nexus-700 hover:border-nexus-600 transition-all">
+                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-6 block">Logística (Entregues na Obra)</label>
+                            <p className="text-white text-2xl font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.entregue || 'Aguardando confirmação logística.'}</p>
                         </div>
                     </div>
                 </div>
                 
-                <div className="bg-nexus-900 p-8 border-t border-nexus-700 flex justify-end shrink-0">
-                    <button onClick={onClose} className="px-12 py-4 bg-nexus-700 hover:bg-nexus-600 text-white rounded-2xl transition-all font-black text-sm uppercase tracking-widest shadow-lg active:scale-95">Fechar Detalhes</button>
+                <div className="bg-nexus-900 p-10 border-t border-nexus-700 flex justify-end shrink-0">
+                    <button onClick={onClose} className="px-16 py-5 bg-nexus-700 hover:bg-nexus-600 text-white rounded-3xl transition-all font-black text-lg uppercase tracking-widest shadow-2xl active:scale-95 flex items-center gap-4">
+                        <X size={24} /> Fechar Análise
+                    </button>
                 </div>
             </div>
         </div>
@@ -843,90 +845,124 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         if (currentSlide === 3) {
             return (
-                <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-center">
+                <div className="h-full flex flex-col space-y-8 p-4">
                     <div className="flex justify-between items-end">
-                        <h2 className="text-4xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Status de Compras & Suprimentos</h2>
-                        <ShoppingCart className="text-blue-500 mb-2" size={48} />
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-6">
-                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Total Mapeado</p>
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-5xl font-black text-white">{stats.buyingTotal}</h3>
-                                <Package className="text-blue-500" size={32} />
+                        <div className="space-y-2">
+                            <p className="text-blue-500 font-black uppercase tracking-[0.4em] text-xs">Suprimentos & Logística</p>
+                            <h2 className="text-6xl font-black text-white uppercase tracking-tighter leading-none">Status de Compras</h2>
+                        </div>
+                        <div className="flex items-center gap-4 bg-nexus-800/50 px-6 py-3 rounded-2xl border border-nexus-700">
+                            <ShoppingCart className="text-blue-500" size={32} />
+                            <div className="text-right">
+                                <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Total Mapeado</p>
+                                <p className="text-2xl font-black text-white leading-none">{stats.buyingTotal} Projetos</p>
                             </div>
                         </div>
-                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Padrão</p>
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-5xl font-black text-green-500">{stats.standardBuys.length}</h3>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-8">
+                        {/* Padrão */}
+                        <div className="bg-nexus-800/40 p-8 rounded-[2.5rem] border border-nexus-700 shadow-xl relative overflow-hidden group hover:border-green-500/50 transition-all">
+                            <div className="absolute top-6 right-6 w-16 h-16 bg-green-600/20 rounded-2xl flex items-center justify-center border border-green-500/30">
                                 <CheckCircle className="text-green-500" size={32} />
                             </div>
-                        </div>
-                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Intermediário</p>
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-5xl font-black text-yellow-500">{stats.intermediateBuys.length}</h3>
-                                <Clock className="text-yellow-500" size={32} />
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Status Padrão</p>
+                            <h3 className="text-6xl font-black text-green-500 tracking-tighter">{stats.standardBuys.length}</h3>
+                            <div className="mt-4 h-1.5 w-full bg-nexus-900 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500" style={{ width: `${(stats.standardBuys.length / stats.buyingTotal) * 100}%` }}></div>
                             </div>
                         </div>
-                        <div className="bg-nexus-800/50 p-6 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest mb-2">Crítico</p>
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-5xl font-black text-red-500">{stats.criticalBuys.length}</h3>
+
+                        {/* Intermediário */}
+                        <div className="bg-nexus-800/40 p-8 rounded-[2.5rem] border border-nexus-700 shadow-xl relative overflow-hidden group hover:border-yellow-500/50 transition-all">
+                            <div className="absolute top-6 right-6 w-16 h-16 bg-yellow-600/20 rounded-2xl flex items-center justify-center border border-yellow-500/30">
+                                <Clock className="text-yellow-500" size={32} />
+                            </div>
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Intermediário</p>
+                            <h3 className="text-6xl font-black text-yellow-500 tracking-tighter">{stats.intermediateBuys.length}</h3>
+                            <div className="mt-4 h-1.5 w-full bg-nexus-900 rounded-full overflow-hidden">
+                                <div className="h-full bg-yellow-500" style={{ width: `${(stats.intermediateBuys.length / stats.buyingTotal) * 100}%` }}></div>
+                            </div>
+                        </div>
+
+                        {/* Crítico */}
+                        <div className="bg-nexus-800/40 p-8 rounded-[2.5rem] border border-nexus-700 shadow-xl relative overflow-hidden group hover:border-red-500/50 transition-all">
+                            <div className="absolute top-6 right-6 w-16 h-16 bg-red-600/20 rounded-2xl flex items-center justify-center border border-red-500/30">
                                 <AlertTriangle className="text-red-500" size={32} />
+                            </div>
+                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Status Crítico</p>
+                            <h3 className="text-6xl font-black text-red-500 tracking-tighter">{stats.criticalBuys.length}</h3>
+                            <div className="mt-4 h-1.5 w-full bg-nexus-900 rounded-full overflow-hidden">
+                                <div className="h-full bg-red-500" style={{ width: `${(stats.criticalBuys.length / stats.buyingTotal) * 100}%` }}></div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-nexus-800/50 rounded-3xl border border-nexus-700 overflow-hidden shadow-2xl flex-1">
-                        <div className="overflow-y-auto max-h-[400px] custom-scrollbar">
-                            <table className="w-full text-left">
-                                <thead className="bg-nexus-900/80 sticky top-0 z-10">
-                                    <tr className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">
-                                        <th className="px-8 py-6">Projeto</th>
-                                        <th className="px-8 py-6">Criticidade</th>
-                                        <th className="px-8 py-6">Materiais Pendentes</th>
-                                        <th className="px-8 py-6">Data Disponível</th>
+                    <div className="bg-nexus-800/40 rounded-[3rem] border border-nexus-700 overflow-hidden shadow-2xl flex-1 flex flex-col relative">
+                        <div className="absolute inset-0 bg-gradient-to-b from-nexus-900/50 to-transparent pointer-events-none h-20 z-20"></div>
+                        <div className="overflow-y-auto flex-1 custom-scrollbar">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-nexus-900/95 sticky top-0 z-30">
+                                    <tr className="text-[10px] font-black text-nexus-500 uppercase tracking-[0.3em]">
+                                        <th className="px-10 py-8">Projeto / Cliente</th>
+                                        <th className="px-10 py-8">Identificador CC</th>
+                                        <th className="px-10 py-8 text-center">Criticidade</th>
+                                        <th className="px-10 py-8">Materiais Pendentes</th>
+                                        <th className="px-10 py-8 text-right">Disponibilidade</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-nexus-800">
+                                <tbody className="divide-y divide-nexus-700/30">
                                     {buyingStatus.length > 0 ? (
                                         buyingStatus.map((b, i) => {
                                             const isCritico = b.status === 'Crítico';
                                             const isIntermediario = b.status === 'Intermediário';
-                                            const colorClass = isCritico ? 'text-red-400' : isIntermediario ? 'text-yellow-400' : 'text-green-400';
-                                            const badgeClass = isCritico ? 'bg-red-500' : isIntermediario ? 'bg-yellow-500 text-black' : 'bg-green-500';
+                                            const colorClass = isCritico ? 'text-red-500' : isIntermediario ? 'text-yellow-500' : 'text-green-500';
+                                            const badgeClass = isCritico ? 'bg-red-600/20 text-red-500 border-red-500/30' : isIntermediario ? 'bg-yellow-600/20 text-yellow-500 border-yellow-500/30' : 'bg-green-600/20 text-green-500 border-green-500/30';
+                                            const dateColor = b.dataDisponivel === 'A definir' ? 'text-red-500' : 'text-green-500';
 
                                             return (
-                                                <tr key={i} className="hover:bg-nexus-700/20 transition-colors cursor-pointer group" onClick={() => setSelectedBuyingDetail(b)}>
-                                                    <td className="px-8 py-6 font-bold text-white text-lg">
-                                                        <div className="flex items-center gap-2">
-                                                            {b.projeto} <Eye size={14} className="opacity-0 group-hover:opacity-50 text-blue-400" />
-                                                        </div>
-                                                        <span className="block text-xs font-mono text-nexus-500">{b.numeroProjeto}</span>
+                                                <tr 
+                                                    key={i} 
+                                                    className="hover:bg-nexus-700/40 transition-all cursor-pointer group border-l-8 border-transparent hover:border-blue-500" 
+                                                    onClick={() => setSelectedBuyingDetail(b)}
+                                                >
+                                                    <td className="px-10 py-6">
+                                                        <p className={`font-black text-xl uppercase tracking-tight ${colorClass} group-hover:translate-x-2 transition-transform`}>
+                                                            {b.projeto}
+                                                        </p>
                                                     </td>
-                                                    <td className="px-8 py-6">
-                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeClass}`}>
+                                                    <td className="px-10 py-6">
+                                                        <span className="font-mono font-black text-sm text-nexus-400 bg-nexus-900/50 px-3 py-1 rounded-lg border border-nexus-700">{b.numeroProjeto}</span>
+                                                    </td>
+                                                    <td className="px-10 py-6 text-center">
+                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${badgeClass}`}>
                                                             {b.status}
                                                         </span>
                                                     </td>
-                                                    <td className={`px-8 py-6 font-medium ${colorClass}`}>{b.aComprar}</td>
-                                                    <td className="px-8 py-6 font-black text-white italic">{b.dataDisponivel}</td>
+                                                    <td className={`px-10 py-6 font-bold text-sm ${colorClass} opacity-80 italic max-w-xs truncate`}>
+                                                        {b.aComprar || 'Nenhum pendente'}
+                                                    </td>
+                                                    <td className={`px-10 py-6 font-black text-right text-lg italic ${dateColor}`}>
+                                                        {b.dataDisponivel}
+                                                    </td>
                                                 </tr>
                                             );
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={4} className="px-8 py-20 text-center text-nexus-500 font-bold">Nenhum dado de compras identificado.</td>
+                                            <td colSpan={5} className="px-10 py-24 text-center text-nexus-500 font-black uppercase tracking-widest opacity-50 italic">Nenhum dado de suprimentos identificado no relatório.</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <p className="text-xs text-nexus-500 font-bold uppercase text-center italic opacity-50">Clique em qualquer projeto para ver o detalhamento completo de materiais</p>
+                    <div className="flex justify-center">
+                        <div className="bg-nexus-800/80 px-8 py-3 rounded-full border border-nexus-700 flex items-center gap-4 animate-pulse">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.8)]"></div>
+                            <p className="text-[10px] text-nexus-400 font-black uppercase tracking-[0.2em]">Selecione uma linha para detalhamento executivo de materiais</p>
+                        </div>
+                    </div>
                 </div>
             );
         }

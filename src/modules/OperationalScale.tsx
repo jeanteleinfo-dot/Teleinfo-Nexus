@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import Papa from 'papaparse';
 import { 
   Calendar, Users, Briefcase, Truck, Wrench, Plus, Search, Filter, 
   Copy, Share2, Printer, ChevronLeft, ChevronRight, MoreHorizontal,
@@ -19,6 +20,22 @@ import { useSupabaseData, supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 
 // --- CONSTANTS & HELPERS ---
+
+const normalizeName = (name: string) => {
+  return name
+    .trim()
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+const fuzzySearch = (text: string, query: string) => {
+  if (!query) return true;
+  const normalizedText = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const normalizedQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return normalizedText.includes(normalizedQuery);
+};
 
 const STATUS_COLORS: Record<string, string> = {
   'Escalado': 'bg-green-500',
@@ -45,6 +62,7 @@ const STATUS_TEXT: Record<string, string> = {
 export const OperationalScale: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === UserRole.ADMIN;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'scale' | 'registries' | 'absences' | 'reports'>('scale');
@@ -78,6 +96,44 @@ export const OperationalScale: React.FC = () => {
     vehicleId: '',
     observations: ''
   });
+
+  // Intelligent Suggestions
+  const frequentCollaborators = useMemo(() => {
+    if (!editingScale?.workId) return [];
+    const workScales = scales.filter(s => s.workId === editingScale.workId);
+    const counts = workScales.reduce((acc, s) => {
+      acc[s.employeeId] = (acc[s.employeeId] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => employees.find(e => e.id === id))
+      .filter(Boolean) as Employee[];
+  }, [editingScale?.workId, scales, employees]);
+
+  const unassignedEmployees = useMemo(() => {
+    const dayScales = scales.filter(s => s.date === selectedDate);
+    const assignedIds = new Set(dayScales.map(s => s.employeeId));
+    const absentIds = new Set(absences.filter(a => selectedDate >= a.startDate && selectedDate <= a.endDate).map(a => a.employeeId));
+    
+    return employees.filter(e => e.active && !assignedIds.has(e.id) && !absentIds.has(e.id));
+  }, [selectedDate, scales, employees, absences]);
+
+  const worksWithInsufficientTeam = useMemo(() => {
+    const dayScales = scales.filter(s => s.date === selectedDate);
+    const workCounts = dayScales.reduce((acc, s) => {
+      acc[s.workId] = (acc[s.workId] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return works.filter(w => {
+      if (w.status !== 'Ativa' || !w.requiredTeamSize) return false;
+      const count = workCounts[w.id] || 0;
+      return count < w.requiredTeamSize;
+    });
+  }, [selectedDate, scales, works]);
 
   const handleSaveMassScale = () => {
     if (!massScaleData.workId || massScaleData.employeeIds.length === 0 || !massScaleData.date) {
@@ -257,6 +313,75 @@ export const OperationalScale: React.FC = () => {
     });
   };
 
+  const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const importedData = results.data as any[];
+        if (importedData.length === 0) {
+          alert("O arquivo CSV está vazio ou é inválido.");
+          return;
+        }
+
+        const processedData = importedData.map(item => {
+          const base = {
+            ...item,
+            id: item.id || `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          };
+
+          // Specific field parsing to ensure types
+          if (registryTab === 'employees') {
+            return {
+              ...base,
+              active: item.active === 'true' || item.active === '1' || item.active === true,
+              canDrive: item.canDrive === 'true' || item.canDrive === '1' || item.canDrive === true,
+              canActAlone: item.canActAlone === 'true' || item.canActAlone === '1' || item.canActAlone === true,
+            };
+          }
+          if (registryTab === 'works') {
+            return {
+              ...base,
+              requiredTeamSize: item.requiredTeamSize ? Number(item.requiredTeamSize) : undefined,
+            };
+          }
+          if (registryTab === 'tools') {
+            return {
+              ...base,
+              quantity: item.quantity ? Number(item.quantity) : 0,
+            };
+          }
+          return base;
+        });
+
+        switch (registryTab) {
+          case 'employees':
+            setEmployees(prev => [...prev, ...processedData]);
+            break;
+          case 'works':
+            setWorks(prev => [...prev, ...processedData]);
+            break;
+          case 'fleet':
+            setFleet(prev => [...prev, ...processedData]);
+            break;
+          case 'tools':
+            setTools(prev => [...prev, ...processedData]);
+            break;
+        }
+        
+        alert(`${processedData.length} registros importados com sucesso!`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      },
+      error: (error) => {
+        console.error("Erro ao processar CSV:", error);
+        alert("Erro ao processar o arquivo CSV.");
+      }
+    });
+  };
+
   // --- RENDERERS ---
 
   const renderRegistryTab = () => {
@@ -322,15 +447,30 @@ export const OperationalScale: React.FC = () => {
               </button>
             ))}
           </div>
-          <button 
-            onClick={() => {
-              setEditingItem({});
-              setIsEditingRegistry(true);
-            }}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg shadow-blue-900/40"
-          >
-            <Plus size={18} /> Novo Registro
-          </button>
+          <div className="flex gap-2">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleCSVImport} 
+              accept=".csv" 
+              className="hidden" 
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-nexus-800 hover:bg-nexus-700 text-nexus-300 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold border border-nexus-700"
+            >
+              <Download size={18} /> Importar CSV
+            </button>
+            <button 
+              onClick={() => {
+                setEditingItem({});
+                setIsEditingRegistry(true);
+              }}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg shadow-blue-900/40"
+            >
+              <Plus size={18} /> Novo Registro
+            </button>
+          </div>
         </div>
 
         <div className="bg-nexus-800 rounded-2xl border border-nexus-700 overflow-hidden shadow-xl">
@@ -382,12 +522,11 @@ export const OperationalScale: React.FC = () => {
       if (searchQuery) {
         const emp = employees.find(e => e.id === s.employeeId);
         const work = works.find(w => w.id === s.workId);
-        const search = searchQuery.toLowerCase();
         return (
-          emp?.name.toLowerCase().includes(search) ||
-          work?.name.toLowerCase().includes(search) ||
-          s.client.toLowerCase().includes(search) ||
-          s.costCenter.toLowerCase().includes(search)
+          fuzzySearch(emp?.name || '', searchQuery) ||
+          fuzzySearch(work?.name || '', searchQuery) ||
+          fuzzySearch(s.client || '', searchQuery) ||
+          fuzzySearch(s.costCenter || '', searchQuery)
         );
       }
       return true;
@@ -395,6 +534,34 @@ export const OperationalScale: React.FC = () => {
 
     return (
       <div className="space-y-6">
+        {/* Alerts Section */}
+        {(unassignedEmployees.length > 0 || worksWithInsufficientTeam.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {unassignedEmployees.length > 0 && (
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-start gap-3">
+                <AlertTriangle className="text-orange-500 shrink-0" size={20} />
+                <div>
+                  <h5 className="text-orange-500 font-black text-[10px] uppercase tracking-widest">Colaboradores Disponíveis ({unassignedEmployees.length})</h5>
+                  <p className="text-nexus-400 text-xs mt-1">
+                    {unassignedEmployees.map(e => e.name).join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+            {worksWithInsufficientTeam.length > 0 && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-start gap-3">
+                <AlertTriangle className="text-red-500 shrink-0" size={20} />
+                <div>
+                  <h5 className="text-red-500 font-black text-[10px] uppercase tracking-widest">Equipe Insuficiente ({worksWithInsufficientTeam.length})</h5>
+                  <p className="text-nexus-400 text-xs mt-1">
+                    {worksWithInsufficientTeam.map(w => `${w.name} (Faltam ${w.requiredTeamSize! - (scales.filter(s => s.workId === w.id && s.date === selectedDate).length)} )`).join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div className="flex items-center gap-4">
@@ -881,6 +1048,20 @@ export const OperationalScale: React.FC = () => {
                     <option value="">Selecione...</option>
                     {employees.filter(e => e.active).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                   </select>
+                  {frequentCollaborators.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      <span className="text-[8px] font-black text-nexus-600 uppercase w-full mb-1">Sugestões (Frequentes):</span>
+                      {frequentCollaborators.map(fc => (
+                        <button 
+                          key={fc.id}
+                          onClick={() => setEditingScale({ ...editingScale, employeeId: fc.id })}
+                          className="px-2 py-1 bg-nexus-900 border border-nexus-700 rounded-md text-[9px] text-nexus-400 hover:text-white hover:border-blue-500 transition-all"
+                        >
+                          {fc.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Obra *</label>
@@ -901,8 +1082,33 @@ export const OperationalScale: React.FC = () => {
                     className="w-full bg-nexus-900 border border-nexus-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none"
                   >
                     <option value="">Selecione...</option>
-                    {works.filter(w => w.status === 'Ativa').map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    {works.filter(w => w.status === 'Ativa').map(w => <option key={w.id} value={w.id}>{w.name} ({w.costCenter})</option>)}
                   </select>
+                  <div className="mt-2">
+                    <label className="text-[8px] font-black text-nexus-600 uppercase block mb-1">Busca por Centro de Custo:</label>
+                    <input 
+                      type="text"
+                      placeholder="Digite o CC..."
+                      className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500"
+                      onChange={e => {
+                        const cc = e.target.value;
+                        if (cc.length >= 3) {
+                          const work = works.find(w => w.costCenter.includes(cc));
+                          if (work) {
+                            setEditingScale({ 
+                              ...editingScale, 
+                              workId: work.id,
+                              client: work.client,
+                              costCenter: work.costCenter,
+                              address: work.address,
+                              time: work.standardTime,
+                              location: work.standardLocation
+                            });
+                          }
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Horário</label>
@@ -1077,6 +1283,10 @@ export const OperationalScale: React.FC = () => {
                     <input type="text" value={editingItem?.standardTime || ''} onChange={e => setEditingItem({...editingItem, standardTime: e.target.value})} className="w-full bg-nexus-900 border border-nexus-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
                   </div>
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Equipe Mínima</label>
+                    <input type="number" value={editingItem?.requiredTeamSize || ''} onChange={e => setEditingItem({...editingItem, requiredTeamSize: parseInt(e.target.value)})} className="w-full bg-nexus-900 border border-nexus-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Local Padrão</label>
                     <select value={editingItem?.standardLocation || 'No Cliente'} onChange={e => setEditingItem({...editingItem, standardLocation: e.target.value})} className="w-full bg-nexus-900 border border-nexus-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none">
                       <option value="No Cliente">No Cliente</option>
@@ -1130,8 +1340,13 @@ export const OperationalScale: React.FC = () => {
               <button onClick={() => setIsEditingRegistry(false)} className="px-6 py-2 text-nexus-400 font-bold hover:text-white transition-colors">Cancelar</button>
               <button 
                 onClick={async () => {
-                  const newItem = { ...editingItem, id: editingItem.id || `${activeTab === 'absences' ? 'absence' : registryTab}-${Date.now()}` };
+                  let newItem = { ...editingItem, id: editingItem.id || `${activeTab === 'absences' ? 'absence' : registryTab}-${Date.now()}` };
                   
+                  // Normalization
+                  if (newItem.name) newItem.name = normalizeName(newItem.name);
+                  if (newItem.shortName) newItem.shortName = normalizeName(newItem.shortName);
+                  if (newItem.client) newItem.client = normalizeName(newItem.client);
+
                   if (activeTab === 'absences') {
                     setAbsences(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);

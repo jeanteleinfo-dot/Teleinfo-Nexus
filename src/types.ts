@@ -207,6 +207,7 @@ export interface WorkContract {
   status: 'Ativa' | 'Concluída' | 'Pausada';
   standardTime: string;
   standardLocation: 'No Cliente' | 'Teleinfo' | 'Outro';
+  requiredTeamSize?: number;
   observations: string;
 }
 

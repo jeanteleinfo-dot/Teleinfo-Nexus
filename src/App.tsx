@@ -4,8 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 // Lazy loading components
-const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
-const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })));
+const Login = lazy(() => import('./pages/Login.tsx').then(module => ({ default: module.Login })));
+const Dashboard = lazy(() => import('./pages/Dashboard.tsx').then(module => ({ default: module.Dashboard })));
 
 const LoadingScreen: React.FC<{ message?: string }> = ({ message = "Autenticando Nexus" }) => (
   <div className="min-h-screen bg-nexus-900 flex flex-col items-center justify-center">
