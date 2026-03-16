@@ -11,6 +11,7 @@ import {
   FileSearch, Loader2, Package, CheckCircle, Info
 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import Papa from 'papaparse';
 import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
 import { supabase, syncToSupabase, fetchFromSupabase, useSupabaseData } from '../services/supabase';
 import { generateSeniorPlanningAuditReport } from '../services/geminiService';
@@ -57,24 +58,26 @@ const calculateTimeProgress = (startStr: string, endStr: string) => {
 };
 
 const parseGeneralCsv = (text: string): any[] => {
-    if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length < 2) return [];
-    const sep = ";";
-    return lines.slice(1).map((line, idx) => {
-        const cells = line.split(sep);
-        const percRaw = cells[9]?.replace('%', '').replace(',', '.').trim();
+    const results = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: ";",
+        transformHeader: (header) => header.trim().replace(/^\ufeff/, ""),
+    });
+
+    return results.data.map((item: any, idx) => {
+        const percRaw = (item['%'] || "").toString().replace('%', '').replace(',', '.').trim();
         return {
-            id: `gen-${idx}-${Date.now()}`,
-            item: cells[0]?.trim() || "",
-            cliente: cells[1]?.trim() || "",
-            tipoProjeto: cells[2]?.trim() || "",
-            tipoProduto: cells[3]?.trim() || "",
-            squadLeader: cells[4]?.trim() || "",
-            bus: cells[5]?.trim() || "",
-            cCusto: cells[6]?.trim() || "",
-            escopo: cells[7]?.trim() || "",
-            status: cells[8]?.trim() || "",
+            id: `gen-${item.ITEM || idx}-${Date.now()}`,
+            item: item.ITEM || "",
+            cliente: item.CLIENTE || "",
+            tipoProjeto: item['TIPO DE PROJETO'] || "",
+            tipoProduto: item['TIPO DE PRODUTO'] || "",
+            squadLeader: item['SQUAD LEADER'] || "",
+            bus: item.BUs || "",
+            cCusto: item['C.Custo'] || "",
+            escopo: item.ESCOPO || "",
+            status: item.STATUS || "",
             perc: parseFloat(percRaw) || 0
         };
     });
@@ -96,7 +99,7 @@ const GeneralDashboardView: React.FC = () => {
             const sRaw = p.status?.trim() || 'NÃO DEFINIDO';
             const sUpper = sRaw.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             counts[sRaw] = (counts[sRaw] || 0) + 1;
-            totalPerc += p.perc;
+            totalPerc += (p.perc || 0);
             
             if (sUpper.includes("NAO INICIADO")) {
                 naoIniciados++;
@@ -106,7 +109,7 @@ const GeneralDashboardView: React.FC = () => {
         });
         return {
             statusCounts: counts,
-            avgCompletion: (totalPerc / projects.length).toFixed(1),
+            avgCompletion: projects.length > 0 ? (totalPerc / projects.length).toFixed(1) : "0.0",
             total: projects.length,
             naoIniciados: naoIniciados,
             emAndamento: emAndamento
@@ -125,18 +128,35 @@ const GeneralDashboardView: React.FC = () => {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        
         const reader = new FileReader();
         reader.onload = async (evt) => {
-            const parsed = parseGeneralCsv(evt.target?.result as string);
-            const { error: deleteError } = await supabase.from('general_projects').delete().neq('id', '0');
-            if (!deleteError) {
+            const text = evt.target?.result as string;
+            const parsed = parseGeneralCsv(text);
+            
+            if (parsed.length === 0) {
+                alert("Nenhum dado encontrado no arquivo CSV.");
+                return;
+            }
+
+            try {
+                // Delete existing records first to avoid duplicates with new IDs
+                const { error: deleteError } = await supabase.from('general_projects').delete().neq('id', '0');
+                
+                if (deleteError) {
+                    console.error("Erro ao limpar dados antigos:", deleteError);
+                }
+                
+                // Update local state which triggers syncToSupabase (upsert)
                 setProjects(parsed);
-                alert("Dados gerais importados com sucesso!");
-            } else {
-                setProjects(parsed);
+                alert(`${parsed.length} projetos importados com sucesso!`);
+            } catch (err) {
+                console.error("Erro na importação:", err);
+                alert("Erro ao importar dados.");
             }
         };
         reader.readAsText(file);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     return (

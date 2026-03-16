@@ -368,7 +368,7 @@ export const OperationalScale: React.FC = () => {
       header: true,
       skipEmptyLines: true,
       delimiter: ";",
-      transformHeader: (header) => header.trim(),
+      transformHeader: (header) => header.trim().replace(/^\ufeff/, "").toUpperCase(),
       complete: (results) => {
         const importedData = results.data as any[];
         if (importedData.length === 0) {
@@ -381,24 +381,24 @@ export const OperationalScale: React.FC = () => {
           
           if (registryTab === 'employees') {
             // Mapping from user's specific CSV structure
-            mappedItem.name = item['NOME COMPLETO'] || item['Nome Completo'] || item.name;
-            mappedItem.shortName = item['NOME CURTO'] || item['Nome Curto'] || item.shortName || mappedItem.name;
-            mappedItem.role = item['CARGO / FUNÇÃO'] || item['CARGO / FUNÇÃO '] || item['Cargo'] || item.role;
-            mappedItem.team = item['EQUIPE / BU'] || item['Equipe'] || item.team;
+            mappedItem.name = item['NOME COMPLETO'] || item.NAME;
+            mappedItem.shortName = item['NOME CURTO'] || item.SHORTNAME || mappedItem.name;
+            mappedItem.role = item['CARGO / FUNÇÃO'] || item['CARGO / FUNÇÃO '] || item.ROLE;
+            mappedItem.team = item['EQUIPE / BU'] || item.TEAM;
             mappedItem.active = true;
             mappedItem.canDrive = false;
             mappedItem.canActAlone = false;
           } else if (registryTab === 'works') {
-            mappedItem.name = item['NOME DE OBRA'] || item.name;
-            mappedItem.client = item['CLIENTE'] || item.client;
-            mappedItem.costCenter = item['CENTRO DE CUSTO'] || item.costCenter;
-            mappedItem.address = item['ENDEREÇO COMPLETO'] || item.address;
-            mappedItem.standardTime = item['HORÁRIO PADRÃO'] || item.standardTime;
+            mappedItem.name = item['NOME DE OBRA'] || item.NAME;
+            mappedItem.client = item['CLIENTE'] || item.CLIENT;
+            mappedItem.costCenter = item['CENTRO DE CUSTO'] || item.COSTCENTER;
+            mappedItem.address = item['ENDEREÇO COMPLETO'] || item.ADDRESS;
+            mappedItem.standardTime = item['HORÁRIO PADRÃO'] || item.STANDARDTIME;
             mappedItem.status = 'Ativa';
           } else if (registryTab === 'fleet') {
-            mappedItem.model = item['MARCA / MODELO'] || item.model;
-            mappedItem.plate = item['PLACA'] || item.plate;
-            const rawStatus = item['SITUAÇÃO'] || item.status || 'Disponível';
+            mappedItem.model = item['MARCA / MODELO'] || item.MODEL;
+            mappedItem.plate = item['PLACA'] || item.PLATE;
+            const rawStatus = item['SITUAÇÃO'] || item.STATUS || 'Disponível';
             mappedItem.status = rawStatus.includes('Disponivel') ? 'Disponível' : rawStatus;
           }
 
