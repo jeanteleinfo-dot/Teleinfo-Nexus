@@ -28,7 +28,9 @@ export const syncToSupabase = async (tableName: string, data: any[]) => {
     
     if (error) throw error;
   } catch (err) {
-    console.error(`Sincronização ${tableName} falhou.`);
+    console.error(`Sincronização ${tableName} falhou:`, err);
+    // We don't alert here to avoid spamming, but we could if needed.
+    // In a real app, we'd have a toast notification system.
   }
 };
 
@@ -45,7 +47,7 @@ export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | nul
     if (error) throw error;
     return data as T[];
   } catch (err) {
-    console.warn(`Busca em ${tableName} indisponível.`);
+    console.error(`Busca em ${tableName} falhou:`, err);
     return null;
   }
 };

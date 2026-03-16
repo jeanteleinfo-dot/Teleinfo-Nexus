@@ -6,7 +6,11 @@ let aiInstance: GoogleGenAI | null = null;
 const getAI = () => {
   if (aiInstance) return aiInstance;
   
-  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+  // Try platform keys first
+  const apiKey = (typeof process !== 'undefined' && process.env ? (process.env.GEMINI_API_KEY || process.env.API_KEY) : null) 
+    || ((import.meta as any).env ? (import.meta as any).env.VITE_GEMINI_API_KEY : null)
+    || '';
+
   if (!apiKey) {
     console.warn("Gemini API Key is missing. AI features will be disabled.");
     return null;

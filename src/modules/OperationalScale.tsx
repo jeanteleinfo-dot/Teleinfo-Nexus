@@ -394,7 +394,12 @@ export const OperationalScale: React.FC = () => {
             mappedItem.costCenter = item['CENTRO DE CUSTO'] || item.COSTCENTER;
             mappedItem.address = item['ENDEREÇO COMPLETO'] || item.ADDRESS;
             mappedItem.standardTime = item['HORÁRIO PADRÃO'] || item.STANDARDTIME;
+            mappedItem.requiredTeamSize = parseInt(item['EQUIPE MÍNIMA'] || item['REQUIREDTEAMSIZE'] || '0') || 0;
             mappedItem.status = 'Ativa';
+            mappedItem.unit = item['UNIDADE'] || '';
+            mappedItem.type = item['TIPO'] || '';
+            mappedItem.observations = item['OBSERVAÇÕES'] || '';
+            mappedItem.standardLocation = item['LOCAL PADRÃO'] || 'No Cliente';
           } else if (registryTab === 'fleet') {
             mappedItem.model = item['MARCA / MODELO'] || item.MODEL;
             mappedItem.plate = item['PLACA'] || item.PLATE;
@@ -1408,7 +1413,7 @@ export const OperationalScale: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Equipe Mínima</label>
-                    <input type="number" value={editingItem?.requiredTeamSize || ''} onChange={e => setEditingItem({...editingItem, requiredTeamSize: parseInt(e.target.value)})} className="w-full bg-nexus-900 border border-nexus-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
+                    <input type="number" value={editingItem?.requiredTeamSize || ''} onChange={e => setEditingItem({...editingItem, requiredTeamSize: e.target.value ? parseInt(e.target.value) : 0})} className="w-full bg-nexus-900 border border-nexus-700 rounded-xl p-3 text-white focus:border-blue-500 outline-none" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Local Padrão</label>
@@ -1464,12 +1469,38 @@ export const OperationalScale: React.FC = () => {
               <button onClick={() => setIsEditingRegistry(false)} className="px-6 py-2 text-nexus-400 font-bold hover:text-white transition-colors">Cancelar</button>
               <button 
                 onClick={async () => {
+                  if (registryTab === 'works' && !editingItem.name) {
+                    alert("O nome da obra é obrigatório.");
+                    return;
+                  }
+                  if (registryTab === 'employees' && !editingItem.name) {
+                    alert("O nome do colaborador é obrigatório.");
+                    return;
+                  }
+
                   let newItem = { ...editingItem, id: editingItem.id || `${activeTab === 'absences' ? 'absence' : registryTab}-${Date.now()}` };
                   
                   // Normalization
                   if (newItem.name) newItem.name = normalizeName(newItem.name);
                   if (newItem.shortName) newItem.shortName = normalizeName(newItem.shortName);
                   if (newItem.client) newItem.client = normalizeName(newItem.client);
+
+                  // Default values for works
+                  if (registryTab === 'works') {
+                    newItem = {
+                      ...newItem,
+                      status: newItem.status || 'Ativa',
+                      unit: newItem.unit || '',
+                      type: newItem.type || '',
+                      observations: newItem.observations || '',
+                      client: newItem.client || 'N/A',
+                      costCenter: newItem.costCenter || 'N/A',
+                      address: newItem.address || 'N/A',
+                      standardTime: newItem.standardTime || '08:00 - 18:00',
+                      standardLocation: newItem.standardLocation || 'No Cliente',
+                      requiredTeamSize: newItem.requiredTeamSize || 0
+                    };
+                  }
 
                   if (activeTab === 'absences') {
                     setAbsences(prev => {

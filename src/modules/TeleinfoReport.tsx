@@ -62,7 +62,7 @@ const parseGeneralCsv = (text: string): any[] => {
         header: true,
         skipEmptyLines: true,
         delimiter: ";",
-        transformHeader: (header) => header.trim().replace(/^\ufeff/, ""),
+        transformHeader: (header) => header.trim().replace(/^\ufeff/i, "").toUpperCase(),
     });
 
     return results.data.map((item: any, idx) => {
@@ -74,8 +74,8 @@ const parseGeneralCsv = (text: string): any[] => {
             tipoProjeto: item['TIPO DE PROJETO'] || "",
             tipoProduto: item['TIPO DE PRODUTO'] || "",
             squadLeader: item['SQUAD LEADER'] || "",
-            bus: item.BUs || "",
-            cCusto: item['C.Custo'] || "",
+            bus: item.BUS || item.BUs || "",
+            cCusto: item['C.CUSTO'] || item['C.Custo'] || "",
             escopo: item.ESCOPO || "",
             status: item.STATUS || "",
             perc: parseFloat(percRaw) || 0
