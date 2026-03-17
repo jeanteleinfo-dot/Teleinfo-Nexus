@@ -22,19 +22,36 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
  */
 export const syncToSupabase = async (tableName: string, data: any[]) => {
   try {
-    console.log(`Sincronizando ${data.length} itens para a tabela ${tableName}...`);
-    const { error } = await supabase
-      .from(tableName)
-      .upsert(data, { onConflict: 'id' });
-    
-    if (error) {
-      console.error(`Erro ao sincronizar ${tableName}:`, error.message, error.details);
+    if (!data || !Array.isArray(data)) {
+      console.warn(`Dados inválidos para sincronização em ${tableName}:`, data);
       return false;
     }
-    console.log(`Sincronização de ${tableName} concluída com sucesso.`);
+
+    console.log(`[Supabase] Iniciando sincronização de ${data.length} itens para ${tableName}...`);
+    
+    // Limpeza profunda para garantir que não enviamos objetos complexos que o Supabase não suporte
+    // ou que possam causar erros de serialização se não forem JSONB
+    const cleanData = data.map(item => {
+      const { ...rest } = item;
+      return rest;
+    });
+
+    const { error } = await supabase
+      .from(tableName)
+      .upsert(cleanData, { onConflict: 'id' });
+    
+    if (error) {
+      console.error(`[Supabase] Erro ao sincronizar ${tableName}:`, error.message, error.details, error.hint);
+      window.alert(`ERRO DE BANCO DE DADOS (${tableName}):\n${error.message}\n\nDetalhes: ${error.details || 'Nenhum'}\nDica: ${error.hint || 'Nenhuma'}`);
+      return false;
+    }
+    
+    console.log(`[Supabase] Sincronização de ${tableName} concluída com sucesso.`);
     return true;
   } catch (err) {
-    console.error(`Falha crítica na sincronização de ${tableName}:`, err);
+    console.error(`[Supabase] Falha crítica na sincronização de ${tableName}:`, err);
+    const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+    window.alert(`FALHA CRÍTICA DE CONEXÃO:\nNão foi possível salvar os dados em ${tableName}.\n\nErro: ${msg}`);
     return false;
   }
 };
@@ -52,6 +69,7 @@ export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | nul
     
     if (error) {
       console.error(`Erro ao buscar em ${tableName}:`, error.message, error.details);
+      // Não alertamos no fetch para não atrapalhar a experiência inicial se a tabela estiver vazia
       return null;
     }
     console.log(`Busca em ${tableName} concluída. ${data?.length || 0} itens encontrados.`);
@@ -79,9 +97,14 @@ export function useSupabaseData<T>(tableName: string, initialValue: T): [T, Reac
     }, [tableName]);
 
     const setValue = (value: T | ((val: T) => T)) => {
-        const val = value instanceof Function ? value(storedValue) : value;
-        setStoredValue(val);
-        if (Array.isArray(val)) syncToSupabase(tableName, val);
+        setStoredValue(prev => {
+            const next = value instanceof Function ? value(prev) : value;
+            if (Array.isArray(next)) {
+                // Sincroniza de forma assíncrona sem bloquear o estado
+                syncToSupabase(tableName, next);
+            }
+            return next;
+        });
     };
 
     return [storedValue, setValue, load];

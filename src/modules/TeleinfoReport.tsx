@@ -8,7 +8,7 @@ import {
   Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity,
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
   History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
-  FileSearch, Loader2, Package, CheckCircle, Info
+  FileSearch, Loader2, Package, CheckCircle, Info, RefreshCw, Rocket
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import Papa from 'papaparse';
@@ -278,18 +278,48 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
     const [tempStepName, setTempStepName] = useState('');
     const [tempStepPerc, setTempStepPerc] = useState<number>(0);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!editingProject || !editingProject.name) {
             alert("O nome do projeto é obrigatório.");
             return;
         }
-        const id = editingProject.id || `aud-${Date.now()}`;
-        const updated = editingProject.id 
-            ? projects.map(p => p.id === id ? { ...editingProject, id } : p)
-            : [...projects, { ...editingProject, id }];
-        setProjects(updated);
-        setViewMode('list');
-        setEditingProject(null);
+        
+        // Garante um ID único se for novo projeto
+        const isNew = !editingProject.id;
+        const finalId = editingProject.id || `proj-det-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        
+        const projectToSave = { 
+            ...editingProject, 
+            id: finalId,
+            updated_at: new Date().toISOString() 
+        };
+
+        console.log("[Monitoring] Iniciando salvamento do projeto:", projectToSave);
+
+        const updated = isNew 
+            ? [...projects, projectToSave]
+            : projects.map(p => p.id === finalId ? projectToSave : p);
+        
+        try {
+            setProjects(updated);
+            
+            // Forçamos uma pequena espera para o estado atualizar e o hook de sync ser chamado
+            console.log("[Monitoring] Estado local atualizado. Aguardando confirmação do banco...");
+            
+            setViewMode('list');
+            setEditingProject(null);
+            
+            // Feedback visual imediato
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] animate-bounce font-bold';
+            toast.innerText = '✓ Projeto salvo e sincronizando...';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+
+        } catch (err) {
+            console.error("[Monitoring] Erro ao salvar:", err);
+            alert("Erro ao processar salvamento. Verifique o console para detalhes.");
+        }
     };
 
     const addStep = () => {
@@ -656,74 +686,74 @@ const BuyingDetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () =>
     
     // Mapeamento explícito de cores para evitar problemas com interpolação do Tailwind
     const colorConfig = isCritico 
-        ? { border: 'border-red-500/50', bg: 'bg-red-600', text: 'text-red-400', icon: AlertTriangle }
+        ? { border: 'border-red-500', bg: 'bg-red-600', text: 'text-red-400', icon: AlertTriangle, shadow: 'shadow-[0_0_80px_rgba(239,68,68,0.4)]' }
         : isIntermediario 
-        ? { border: 'border-yellow-500/50', bg: 'bg-yellow-600', text: 'text-yellow-400', icon: Clock }
-        : { border: 'border-green-500/50', bg: 'bg-green-600', text: 'text-green-400', icon: CheckCircle };
+        ? { border: 'border-yellow-500', bg: 'bg-yellow-600', text: 'text-yellow-400', icon: Clock, shadow: 'shadow-[0_0_80px_rgba(234,179,8,0.3)]' }
+        : { border: 'border-green-500', bg: 'bg-green-600', text: 'text-green-400', icon: CheckCircle, shadow: 'shadow-[0_0_80px_rgba(34,197,94,0.3)]' };
 
     const Icon = colorConfig.icon;
 
     return (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[1100] p-4 md:p-8 backdrop-blur-3xl animate-fadeIn" onClick={onClose}>
-            <div className={`bg-nexus-800 border-2 ${colorConfig.border} rounded-[3rem] w-full max-w-7xl shadow-[0_0_100px_rgba(0,0,0,0.8)] animate-slideUp overflow-hidden flex flex-col h-[90vh]`} onClick={e => e.stopPropagation()}>
-                <div className={`${colorConfig.bg} p-10 flex justify-between items-center shrink-0`}>
-                    <div className="flex items-center gap-6 text-white">
-                        <div className="bg-white/20 p-5 rounded-3xl shadow-inner">
-                            <Icon size={56} />
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[1100] p-4 backdrop-blur-lg animate-fadeIn" onClick={onClose}>
+            <div className={`bg-nexus-900 border-2 ${colorConfig.border} rounded-2xl w-full max-w-4xl ${colorConfig.shadow} animate-slideUp overflow-hidden flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
+                <div className={`${colorConfig.bg} p-4 md:p-5 flex justify-between items-center shrink-0`}>
+                    <div className="flex items-center gap-4 text-white">
+                        <div className="bg-white/20 p-2.5 rounded-xl shadow-inner">
+                            <Icon size={24} />
                         </div>
                         <div>
-                            <h3 className="font-black text-5xl uppercase tracking-tighter leading-none">Análise Crítica de Suprimentos</h3>
-                            <p className="text-white/80 text-sm font-black uppercase tracking-[0.4em] mt-3">Nexus Intelligence • Status: {project.status}</p>
+                            <h3 className="font-black text-xl uppercase tracking-tighter leading-none">Análise Crítica de Suprimentos</h3>
+                            <p className="text-white/90 text-[9px] font-black uppercase tracking-[0.3em] mt-1">Nexus Intelligence • Status: {project.status}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-4 rounded-full transition-all active:scale-90"><X size={48}/></button>
+                    <button onClick={onClose} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all active:scale-90"><X size={24}/></button>
                 </div>
                 
-                <div className="p-12 space-y-12 overflow-y-auto custom-scrollbar bg-nexus-800/50 flex-1">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                        <div className="lg:col-span-2 space-y-4">
-                            <label className="text-xs uppercase font-black text-nexus-500 tracking-[0.5em] block">Título do Projeto</label>
-                            <p className="text-6xl font-black text-white leading-tight tracking-tighter uppercase">{project.projeto}</p>
+                <div className="p-6 md:p-8 space-y-8 overflow-y-auto custom-scrollbar bg-nexus-900/50 flex-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 space-y-3">
+                            <label className="text-[9px] uppercase font-black text-nexus-500 tracking-[0.3em] block">Título do Projeto</label>
+                            <p className="text-3xl font-black text-white leading-tight tracking-tighter uppercase">{project.projeto}</p>
                         </div>
-                        <div className="space-y-8 bg-nexus-900/40 p-8 rounded-[2rem] border border-nexus-700">
+                        <div className="space-y-4 bg-nexus-800/40 p-5 rounded-2xl border border-nexus-700 shadow-inner">
                             <div>
-                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-3 block">Nº CC / Identificador</label>
-                                <p className="text-3xl text-white font-mono font-black bg-nexus-900 px-6 py-3 rounded-2xl border border-nexus-700 inline-block shadow-inner">{project.numeroProjeto}</p>
+                                <label className="text-[9px] uppercase font-black text-nexus-500 tracking-[0.2em] mb-1.5 block">Nº CC / Identificador</label>
+                                <p className="text-xl text-white font-mono font-black bg-nexus-900 px-3 py-1.5 rounded-lg border border-nexus-700 inline-block shadow-lg">{project.numeroProjeto}</p>
                             </div>
                             <div>
-                                <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-3 block">Previsão de Disponibilidade</label>
-                                <p className={`text-3xl font-black italic flex items-center gap-3 ${project.dataDisponivel === 'A definir' ? 'text-red-500' : 'text-green-500'}`}>
-                                    <Calendar size={28} /> {project.dataDisponivel}
+                                <label className="text-[9px] uppercase font-black text-nexus-500 tracking-[0.2em] mb-1.5 block">Previsão de Disponibilidade</label>
+                                <p className={`text-xl font-black italic flex items-center gap-2 ${project.dataDisponivel === 'A definir' ? 'text-red-500' : 'text-green-500'}`}>
+                                    <Calendar size={18} /> {project.dataDisponivel}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-10">
-                        <div className="bg-nexus-900/60 p-10 rounded-[2.5rem] border border-nexus-700 shadow-2xl relative">
-                            <div className="absolute top-0 left-10 -translate-y-1/2 bg-nexus-800 px-6 py-2 border border-nexus-700 rounded-full flex items-center gap-3">
-                                <ShoppingCart size={20} className={colorConfig.text} />
-                                <label className="text-[10px] uppercase font-black text-nexus-400 tracking-[0.3em]">Materiais Pendentes / A Comprar</label>
+                    <div className="grid grid-cols-1 gap-6">
+                        <div className="bg-nexus-800/60 p-6 rounded-2xl border border-nexus-700 shadow-lg relative">
+                            <div className="absolute top-0 left-6 -translate-y-1/2 bg-nexus-900 px-4 py-1.5 border border-nexus-700 rounded-full flex items-center gap-2 shadow-md">
+                                <ShoppingCart size={14} className={colorConfig.text} />
+                                <label className="text-[9px] uppercase font-black text-nexus-400 tracking-[0.2em]">Materiais Pendentes / A Comprar</label>
                             </div>
-                            <p className={`text-4xl font-bold whitespace-pre-wrap leading-relaxed ${isCritico ? 'text-red-400' : 'text-white'} pt-4`}>{project.aComprar || 'Nenhum material pendente mapeado.'}</p>
+                            <p className={`text-xl font-bold whitespace-pre-wrap leading-relaxed ${isCritico ? 'text-red-400' : 'text-white'} pt-3`}>{project.aComprar || 'Nenhum material pendente mapeado.'}</p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                         <div className="bg-nexus-900/40 p-10 rounded-[2.5rem] border border-nexus-700 hover:border-nexus-600 transition-all">
-                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-6 block">Fluxo de Compras (Já Adquirido)</label>
-                            <p className="text-white text-2xl font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.comprados || 'Informação não disponível.'}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700 hover:border-nexus-600 transition-all shadow-md">
+                            <label className="text-[9px] uppercase font-black text-nexus-500 tracking-[0.2em] mb-3 block">Fluxo de Compras (Já Adquirido)</label>
+                            <p className="text-white text-lg font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.comprados || 'Informação não disponível.'}</p>
                         </div>
-                        <div className="bg-nexus-900/40 p-10 rounded-[2.5rem] border border-nexus-700 hover:border-nexus-600 transition-all">
-                            <label className="text-[10px] uppercase font-black text-nexus-500 tracking-[0.3em] mb-6 block">Logística (Entregues na Obra)</label>
-                            <p className="text-white text-2xl font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.entregue || 'Aguardando confirmação logística.'}</p>
+                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700 hover:border-nexus-600 transition-all shadow-md">
+                            <label className="text-[9px] uppercase font-black text-nexus-500 tracking-[0.2em] mb-3 block">Logística (Entregues na Obra)</label>
+                            <p className="text-white text-lg font-medium whitespace-pre-wrap leading-relaxed opacity-90">{project.entregue || 'Aguardando confirmação logística.'}</p>
                         </div>
                     </div>
                 </div>
                 
-                <div className="bg-nexus-900 p-10 border-t border-nexus-700 flex justify-end shrink-0">
-                    <button onClick={onClose} className="px-16 py-5 bg-nexus-700 hover:bg-nexus-600 text-white rounded-3xl transition-all font-black text-lg uppercase tracking-widest shadow-2xl active:scale-95 flex items-center gap-4">
-                        <X size={24} /> Fechar Análise
+                <div className="bg-nexus-900 p-6 border-t border-nexus-700 flex justify-end shrink-0">
+                    <button onClick={onClose} className="px-8 py-3 bg-nexus-700 hover:bg-nexus-600 text-white rounded-full transition-all font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 flex items-center gap-3">
+                        <X size={16} /> Fechar Análise
                     </button>
                 </div>
             </div>
@@ -771,6 +801,9 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         let totalPerc = 0;
         let naoIniciados = 0;
         let emAndamento = 0;
+        let finalizados = 0;
+        let kickoff = 0;
+        const kickoffProjects: any[] = [];
         const statusCounts: Record<string, number> = {};
 
         generalProjects.forEach(p => {
@@ -781,6 +814,11 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             
             if (sUpper.includes("NAO INICIADO")) {
                 naoIniciados++;
+            } else if (sUpper.includes("KICKOFF")) {
+                kickoff++;
+                kickoffProjects.push(p);
+            } else if (sUpper.includes("FINALIZADO") || p.perc === 100) {
+                finalizados++;
             } else if (sUpper.includes("EM ANDAMENTO") || sUpper.includes("INICIADO") || (p.perc > 0 && p.perc < 100)) {
                 emAndamento++;
             }
@@ -801,6 +839,9 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             avg, 
             notStarted: naoIniciados, 
             emAndamento, 
+            finalizados,
+            kickoff,
+            kickoffProjects,
             statusCounts, 
             buData, 
             criticalBuys,
@@ -828,27 +869,111 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         if (currentSlide === 1) {
             return (
-                <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
-                    <h2 className="text-4xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Portfólio Completo</h2>
-                    <div className={`grid gap-8 ${stats.notStarted > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
-                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Total de Projetos</p>
-                            <h3 className="text-7xl font-black text-white">{stats.total}</h3>
-                        </div>
-                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Finalização Global</p>
-                            <h3 className="text-7xl font-black text-blue-500">{stats.avg}%</h3>
-                        </div>
-                        <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Em Andamento</p>
-                            <h3 className="text-7xl font-black text-blue-500">{stats.emAndamento}</h3>
-                        </div>
-                        {stats.notStarted > 0 && (
-                            <div className="bg-nexus-800/50 p-8 rounded-3xl border border-nexus-700 shadow-xl">
-                                <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Não Iniciados</p>
-                                <h3 className="text-7xl font-black text-orange-500">{stats.notStarted}</h3>
+                <div className="space-y-6 animate-fadeIn h-full flex flex-col justify-start py-2 overflow-hidden">
+                    <h2 className="text-2xl font-black text-white border-l-6 border-blue-600 pl-4 uppercase tracking-tight mb-2">Portfólio Completo</h2>
+                    
+                    <div className="grid grid-cols-6 gap-3 shrink-0">
+                        {/* Total de Projetos */}
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
+                            <div>
+                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Total de Projetos</p>
+                                <h3 className="text-4xl font-black text-white mt-1">{stats.total}</h3>
                             </div>
-                        )}
+                            <Layers className="absolute right-4 bottom-4 text-nexus-700 group-hover:text-nexus-500 transition-colors" size={24} />
+                        </div>
+
+                        {/* Finalização Global */}
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em]">Finalização Global</p>
+                                    <Target className="text-blue-500" size={14} />
+                                </div>
+                                <h3 className="text-2xl font-black text-white mt-1">{stats.avg}%</h3>
+                            </div>
+                            <div className="w-full bg-nexus-900 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div 
+                                    className="h-full bg-blue-500 rounded-full transition-all duration-1000" 
+                                    style={{ width: `${stats.avg}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Não Iniciados */}
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
+                            <div>
+                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Não Iniciados</p>
+                                <h3 className="text-4xl font-black text-red-500 mt-1">{stats.notStarted}</h3>
+                            </div>
+                            <Clock className="absolute right-4 bottom-4 text-red-900/40 group-hover:text-red-500/40 transition-colors" size={24} />
+                        </div>
+
+                        {/* Kickoff */}
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
+                            <div>
+                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Kickoff</p>
+                                <h3 className="text-4xl font-black text-purple-500 mt-1">{stats.kickoff}</h3>
+                            </div>
+                            <Rocket className="absolute right-4 bottom-4 text-purple-900/40 group-hover:text-purple-500/40 transition-colors" size={24} />
+                        </div>
+
+                        {/* Em Andamento */}
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
+                            <div>
+                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Em Andamento</p>
+                                <h3 className="text-4xl font-black text-blue-400 mt-1">{stats.emAndamento}</h3>
+                            </div>
+                            <Activity className="absolute right-4 bottom-4 text-blue-900/40 group-hover:text-blue-400/40 transition-colors" size={24} />
+                        </div>
+
+                        {/* Finalizado */}
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
+                            <div>
+                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Finalizado</p>
+                                <h3 className="text-4xl font-black text-green-500 mt-1">{stats.finalizados}</h3>
+                            </div>
+                            <CheckCircle2 className="absolute right-4 bottom-4 text-green-900/40 group-hover:text-green-500/40 transition-colors" size={24} />
+                        </div>
+                    </div>
+
+                    {/* Lista de Obras em Kickoff */}
+                    <div className="flex-1 overflow-hidden flex flex-col bg-nexus-800/20 rounded-2xl border border-nexus-700/30">
+                        <div className="p-3 border-b border-nexus-700/50 bg-nexus-800/40 flex items-center justify-between">
+                            <h4 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                <Rocket size={14} className="text-purple-500" /> Detalhamento: Obras em Kickoff
+                            </h4>
+                            <span className="text-[10px] font-bold text-nexus-400 bg-nexus-900 px-2 py-0.5 rounded-full">
+                                {stats.kickoff} Projetos
+                            </span>
+                        </div>
+                        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-nexus-700">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-nexus-900 z-10">
+                                    <tr className="border-b border-nexus-700">
+                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">Cliente</th>
+                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">Squad Leader</th>
+                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">C. Custo</th>
+                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">Escopo</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-nexus-800/50">
+                                    {stats.kickoffProjects.length > 0 ? (
+                                        stats.kickoffProjects.map((p, idx) => (
+                                            <tr key={idx} className="hover:bg-nexus-700/20 transition-colors group">
+                                                <td className="p-3 text-xs font-bold text-white group-hover:text-blue-400 transition-colors">{p.cliente}</td>
+                                                <td className="p-3 text-xs font-medium text-nexus-300 italic">{p.squadLeader}</td>
+                                                <td className="p-3 text-xs font-mono text-nexus-400">{p.cCusto}</td>
+                                                <td className="p-3 text-xs text-nexus-400 max-w-xs truncate" title={p.escopo}>{p.escopo}</td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={4} className="p-10 text-center text-nexus-500 italic text-sm">Nenhum projeto em fase de Kickoff identificado.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             );
@@ -876,70 +1001,69 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         if (currentSlide === 3) {
             return (
-                <div className="h-full flex flex-col space-y-8 p-4">
-                    <div className="flex justify-between items-end">
-                        <div className="space-y-2">
-                            <p className="text-blue-500 font-black uppercase tracking-[0.4em] text-xs">Suprimentos & Logística</p>
-                            <h2 className="text-6xl font-black text-white uppercase tracking-tighter leading-none">Status de Compras</h2>
+                <div className="h-full flex flex-col space-y-2 p-1 max-h-full overflow-hidden">
+                    <div className="flex justify-between items-center border-b border-nexus-800 pb-2">
+                        <div className="space-y-0">
+                            <p className="text-blue-500 font-black uppercase tracking-[0.3em] text-[8px]">Suprimentos & Logística</p>
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">Status de Compras</h2>
                         </div>
-                        <div className="flex items-center gap-4 bg-nexus-800/50 px-6 py-3 rounded-2xl border border-nexus-700">
-                            <ShoppingCart className="text-blue-500" size={32} />
+                        <div className="flex items-center gap-2 bg-nexus-800/50 px-3 py-1 rounded-lg border border-nexus-700">
+                            <ShoppingCart className="text-blue-500" size={18} />
                             <div className="text-right">
-                                <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Total Mapeado</p>
-                                <p className="text-2xl font-black text-white leading-none">{stats.buyingTotal} Projetos</p>
+                                <p className="text-[7px] font-black text-nexus-500 uppercase tracking-widest">Total Mapeado</p>
+                                <p className="text-sm font-black text-white leading-none">{stats.buyingTotal} Projetos</p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-8">
+                    <div className="grid grid-cols-3 gap-2">
                         {/* Padrão */}
-                        <div className="bg-nexus-800/40 p-8 rounded-[2.5rem] border border-nexus-700 shadow-xl relative overflow-hidden group hover:border-green-500/50 transition-all">
-                            <div className="absolute top-6 right-6 w-16 h-16 bg-green-600/20 rounded-2xl flex items-center justify-center border border-green-500/30">
-                                <CheckCircle className="text-green-500" size={32} />
+                        <div className="bg-nexus-800/40 p-3 rounded-xl border border-nexus-700 shadow-lg relative overflow-hidden group hover:border-green-500/50 transition-all">
+                            <div className="absolute top-2 right-2 w-8 h-8 bg-green-600/20 rounded-lg flex items-center justify-center border border-green-500/30">
+                                <CheckCircle className="text-green-500" size={16} />
                             </div>
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Status Padrão</p>
-                            <h3 className="text-6xl font-black text-green-500 tracking-tighter">{stats.standardBuys.length}</h3>
-                            <div className="mt-4 h-1.5 w-full bg-nexus-900 rounded-full overflow-hidden">
+                            <p className="text-[8px] font-black text-nexus-500 uppercase tracking-widest mb-0.5">Padrão</p>
+                            <h3 className="text-2xl font-black text-green-500 tracking-tighter">{stats.standardBuys.length}</h3>
+                            <div className="mt-1 h-1 w-full bg-nexus-900 rounded-full overflow-hidden">
                                 <div className="h-full bg-green-500" style={{ width: `${(stats.standardBuys.length / stats.buyingTotal) * 100}%` }}></div>
                             </div>
                         </div>
 
                         {/* Intermediário */}
-                        <div className="bg-nexus-800/40 p-8 rounded-[2.5rem] border border-nexus-700 shadow-xl relative overflow-hidden group hover:border-yellow-500/50 transition-all">
-                            <div className="absolute top-6 right-6 w-16 h-16 bg-yellow-600/20 rounded-2xl flex items-center justify-center border border-yellow-500/30">
-                                <Clock className="text-yellow-500" size={32} />
+                        <div className="bg-nexus-800/40 p-3 rounded-xl border border-nexus-700 shadow-lg relative overflow-hidden group hover:border-yellow-500/50 transition-all">
+                            <div className="absolute top-2 right-2 w-8 h-8 bg-yellow-600/20 rounded-lg flex items-center justify-center border border-yellow-500/30">
+                                <Clock className="text-yellow-500" size={16} />
                             </div>
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Intermediário</p>
-                            <h3 className="text-6xl font-black text-yellow-500 tracking-tighter">{stats.intermediateBuys.length}</h3>
-                            <div className="mt-4 h-1.5 w-full bg-nexus-900 rounded-full overflow-hidden">
+                            <p className="text-[8px] font-black text-nexus-500 uppercase tracking-widest mb-0.5">Intermediário</p>
+                            <h3 className="text-2xl font-black text-yellow-500 tracking-tighter">{stats.intermediateBuys.length}</h3>
+                            <div className="mt-1 h-1 w-full bg-nexus-900 rounded-full overflow-hidden">
                                 <div className="h-full bg-yellow-500" style={{ width: `${(stats.intermediateBuys.length / stats.buyingTotal) * 100}%` }}></div>
                             </div>
                         </div>
 
                         {/* Crítico */}
-                        <div className="bg-nexus-800/40 p-8 rounded-[2.5rem] border border-nexus-700 shadow-xl relative overflow-hidden group hover:border-red-500/50 transition-all">
-                            <div className="absolute top-6 right-6 w-16 h-16 bg-red-600/20 rounded-2xl flex items-center justify-center border border-red-500/30">
-                                <AlertTriangle className="text-red-500" size={32} />
+                        <div className="bg-nexus-800/40 p-3 rounded-xl border border-nexus-700 shadow-lg relative overflow-hidden group hover:border-red-500/50 transition-all">
+                            <div className="absolute top-2 right-2 w-8 h-8 bg-red-600/20 rounded-lg flex items-center justify-center border border-red-500/30">
+                                <AlertTriangle className="text-red-500" size={16} />
                             </div>
-                            <p className="text-xs font-black text-nexus-500 uppercase tracking-widest mb-2">Status Crítico</p>
-                            <h3 className="text-6xl font-black text-red-500 tracking-tighter">{stats.criticalBuys.length}</h3>
-                            <div className="mt-4 h-1.5 w-full bg-nexus-900 rounded-full overflow-hidden">
+                            <p className="text-[8px] font-black text-nexus-500 uppercase tracking-widest mb-0.5">Crítico</p>
+                            <h3 className="text-2xl font-black text-red-500 tracking-tighter">{stats.criticalBuys.length}</h3>
+                            <div className="mt-1 h-1 w-full bg-nexus-900 rounded-full overflow-hidden">
                                 <div className="h-full bg-red-500" style={{ width: `${(stats.criticalBuys.length / stats.buyingTotal) * 100}%` }}></div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-nexus-800/40 rounded-[3rem] border border-nexus-700 overflow-hidden shadow-2xl flex-1 flex flex-col relative">
-                        <div className="absolute inset-0 bg-gradient-to-b from-nexus-900/50 to-transparent pointer-events-none h-20 z-20"></div>
+                    <div className="bg-nexus-800/40 rounded-xl border border-nexus-700 overflow-hidden shadow-2xl flex-1 flex flex-col relative min-h-0">
                         <div className="overflow-y-auto flex-1 custom-scrollbar">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-nexus-900/95 sticky top-0 z-30">
-                                    <tr className="text-[10px] font-black text-nexus-500 uppercase tracking-[0.3em]">
-                                        <th className="px-10 py-8">Projeto / Cliente</th>
-                                        <th className="px-10 py-8">Identificador CC</th>
-                                        <th className="px-10 py-8 text-center">Criticidade</th>
-                                        <th className="px-10 py-8">Materiais Pendentes</th>
-                                        <th className="px-10 py-8 text-right">Disponibilidade</th>
+                                    <tr className="text-[8px] font-black text-nexus-500 uppercase tracking-[0.1em]">
+                                        <th className="px-4 py-2">Projeto / Cliente</th>
+                                        <th className="px-4 py-2">CC</th>
+                                        <th className="px-4 py-2 text-center">Status</th>
+                                        <th className="px-4 py-2">Pendências</th>
+                                        <th className="px-4 py-2 text-right">Disponibilidade</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-nexus-700/30">
@@ -947,33 +1071,33 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                                         buyingStatus.map((b, i) => {
                                             const isCritico = b.status === 'Crítico';
                                             const isIntermediario = b.status === 'Intermediário';
-                                            const colorClass = isCritico ? 'text-red-500' : isIntermediario ? 'text-yellow-500' : 'text-green-500';
-                                            const badgeClass = isCritico ? 'bg-red-600/20 text-red-500 border-red-500/30' : isIntermediario ? 'bg-yellow-600/20 text-yellow-500 border-yellow-500/30' : 'bg-green-600/20 text-green-500 border-green-500/30';
-                                            const dateColor = b.dataDisponivel === 'A definir' ? 'text-red-500' : 'text-green-500';
+                                            const colorClass = isCritico ? 'text-red-400' : isIntermediario ? 'text-yellow-400' : 'text-green-400';
+                                            const badgeClass = isCritico ? 'bg-red-600/20 text-red-400 border-red-500/30' : isIntermediario ? 'bg-yellow-600/20 text-yellow-400 border-yellow-500/30' : 'bg-green-600/20 text-green-400 border-green-500/30';
+                                            const dateColor = b.dataDisponivel === 'A definir' ? 'text-red-400' : 'text-green-400';
 
                                             return (
                                                 <tr 
                                                     key={i} 
-                                                    className="hover:bg-nexus-700/40 transition-all cursor-pointer group border-l-8 border-transparent hover:border-blue-500" 
+                                                    className="hover:bg-nexus-700/40 transition-all cursor-pointer group border-l-2 border-transparent hover:border-blue-500" 
                                                     onClick={() => setSelectedBuyingDetail(b)}
                                                 >
-                                                    <td className="px-10 py-6">
-                                                        <p className={`font-black text-xl uppercase tracking-tight ${colorClass} group-hover:translate-x-2 transition-transform`}>
+                                                    <td className="px-4 py-1.5">
+                                                        <p className={`font-black text-xs uppercase tracking-tight ${colorClass} group-hover:translate-x-1 transition-transform truncate max-w-[200px]`}>
                                                             {b.projeto}
                                                         </p>
                                                     </td>
-                                                    <td className="px-10 py-6">
-                                                        <span className="font-mono font-black text-sm text-nexus-400 bg-nexus-900/50 px-3 py-1 rounded-lg border border-nexus-700">{b.numeroProjeto}</span>
+                                                    <td className="px-4 py-1.5">
+                                                        <span className="font-mono font-black text-[9px] text-nexus-400">{b.numeroProjeto}</span>
                                                     </td>
-                                                    <td className="px-10 py-6 text-center">
-                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${badgeClass}`}>
+                                                    <td className="px-4 py-1.5 text-center">
+                                                        <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest border ${badgeClass}`}>
                                                             {b.status}
                                                         </span>
                                                     </td>
-                                                    <td className={`px-10 py-6 font-bold text-sm ${colorClass} opacity-80 italic max-w-xs truncate`}>
+                                                    <td className={`px-4 py-1.5 font-bold text-[10px] ${colorClass} opacity-80 italic max-w-[250px] truncate`}>
                                                         {b.aComprar || 'Nenhum pendente'}
                                                     </td>
-                                                    <td className={`px-10 py-6 font-black text-right text-lg italic ${dateColor}`}>
+                                                    <td className={`px-4 py-1.5 font-black text-right text-xs italic ${dateColor}`}>
                                                         {b.dataDisponivel}
                                                     </td>
                                                 </tr>
@@ -981,17 +1105,11 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={5} className="px-10 py-24 text-center text-nexus-500 font-black uppercase tracking-widest opacity-50 italic">Nenhum dado de suprimentos identificado no relatório.</td>
+                                            <td colSpan={5} className="px-4 py-8 text-center text-nexus-500 font-black uppercase tracking-widest opacity-50 italic text-[10px]">Nenhum dado identificado.</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                    <div className="flex justify-center">
-                        <div className="bg-nexus-800/80 px-8 py-3 rounded-full border border-nexus-700 flex items-center gap-4 animate-pulse">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.8)]"></div>
-                            <p className="text-[10px] text-nexus-400 font-black uppercase tracking-[0.2em]">Selecione uma linha para detalhamento executivo de materiais</p>
                         </div>
                     </div>
                 </div>
@@ -1008,69 +1126,60 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             const avgExec = project.steps.length > 0 ? project.steps.reduce((acc, s) => acc + s.perc, 0) / project.steps.length : 0;
 
             return (
-                <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-center">
-                    <div className="flex justify-between items-start border-b border-nexus-800 pb-6">
+                <div className="space-y-4 animate-fadeIn h-full flex flex-col justify-center max-h-full overflow-hidden">
+                    <div className="flex justify-between items-start border-b border-nexus-800 pb-4">
                         <div>
-                            <h2 className="text-4xl font-black text-white tracking-tight uppercase">{project.name}</h2>
-                            <div className="flex gap-4 mt-2">
-                                <span className="bg-nexus-800 text-nexus-400 px-3 py-1 rounded text-xs font-black border border-nexus-700">CC: {project.costCenter}</span>
-                                <span className="bg-nexus-800 text-nexus-400 px-3 py-1 rounded text-xs font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
-                                <button 
-                                    onClick={() => onGenerateAiReport(project)}
-                                    disabled={isGeneratingReport}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-[10px] font-black uppercase flex items-center gap-2 shadow-lg shadow-purple-900/40 transition-all active:scale-95 disabled:opacity-50"
-                                >
-                                    {isGeneratingReport ? <Loader2 size={12} className="animate-spin" /> : <BrainCircuit size={12} />}
-                                    Auditoria Sênior IA
-                                </button>
+                            <h2 className="text-3xl font-black text-white tracking-tight uppercase">{project.name}</h2>
+                            <div className="flex gap-2 mt-1">
+                                <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">CC: {project.costCenter}</span>
+                                <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
                             </div>
                         </div>
                         <div className="text-right">
-                           <p className="text-[10px] font-black text-nexus-500 uppercase">Período de Obra</p>
-                           <p className="text-lg font-bold text-white italic">{project.start || 'N/A'} — {project.end || 'N/A'}</p>
+                           <p className="text-[9px] font-black text-nexus-500 uppercase">Período de Obra</p>
+                           <p className="text-base font-bold text-white italic">{project.start || 'N/A'} — {project.end || 'N/A'}</p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase mb-2">Prazo Decorrido</p>
-                            <h4 className="text-4xl font-black text-white">{timeProgress}%</h4>
-                            <div className="w-full bg-nexus-900 h-2 rounded-full mt-4 overflow-hidden">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700">
+                            <p className="text-[9px] font-black text-nexus-500 uppercase mb-1">Prazo Decorrido</p>
+                            <h4 className="text-2xl font-black text-white">{timeProgress}%</h4>
+                            <div className="w-full bg-nexus-900 h-1.5 rounded-full mt-2 overflow-hidden">
                                 <div className="h-full bg-blue-500" style={{ width: `${timeProgress}%` }} />
                             </div>
                         </div>
-                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase mb-2">Execução Média</p>
-                            <h4 className="text-4xl font-black text-green-500">{avgExec.toFixed(0)}%</h4>
-                            <div className="w-full bg-nexus-900 h-2 rounded-full mt-4 overflow-hidden">
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700">
+                            <p className="text-[9px] font-black text-nexus-500 uppercase mb-1">Execução Média</p>
+                            <h4 className="text-2xl font-black text-green-500">{avgExec.toFixed(0)}%</h4>
+                            <div className="w-full bg-nexus-900 h-1.5 rounded-full mt-2 overflow-hidden">
                                 <div className="h-full bg-green-500" style={{ width: `${avgExec}%` }} />
                             </div>
                         </div>
-                        <div className="bg-nexus-800/40 p-6 rounded-2xl border border-nexus-700 col-span-2">
-                            <p className="text-[10px] font-black text-nexus-500 uppercase mb-2">Consumo Global H/H</p>
+                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700 col-span-2">
+                            <p className="text-[9px] font-black text-nexus-500 uppercase mb-1">Consumo Global H/H</p>
                             <div className="flex justify-between items-baseline">
-                                <h4 className="text-4xl font-black text-white">{totalUsed} <span className="text-xs text-nexus-500">/ {totalSold}h</span></h4>
-                                <span className="text-xl font-bold" style={{ color: hhColor }}>{totalSold > 0 ? ((totalUsed/totalSold)*100).toFixed(0) : 0}%</span>
+                                <h4 className="text-2xl font-black text-white">{totalUsed} <span className="text-[10px] text-nexus-500">/ {totalSold}h</span></h4>
+                                <span className="text-lg font-bold" style={{ color: hhColor }}>{totalSold > 0 ? ((totalUsed/totalSold)*100).toFixed(0) : 0}%</span>
                             </div>
-                            <div className="w-full bg-nexus-900 h-2 rounded-full mt-4 overflow-hidden">
+                            <div className="w-full bg-nexus-900 h-1.5 rounded-full mt-2 overflow-hidden">
                                 <div className="h-full transition-all" style={{ width: `${Math.min(100, totalSold > 0 ? (totalUsed/totalSold)*100 : 0)}%`, backgroundColor: hhColor }} />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-nexus-800/20 p-8 rounded-3xl border border-nexus-700 flex-1 min-h-0">
-                        <h4 className="text-xs font-black text-nexus-500 uppercase mb-6 tracking-widest flex items-center gap-2">
-                           <Target size={14} className="text-blue-500" /> Detalhamento de Progresso por Fase
+                    <div className="bg-nexus-800/20 p-4 rounded-2xl border border-nexus-700 flex-1 min-h-0 overflow-hidden flex flex-col">
+                        <h4 className="text-[10px] font-black text-nexus-500 uppercase mb-4 tracking-widest flex items-center gap-2">
+                           <Target size={12} className="text-blue-500" /> Detalhamento de Progresso por Fase
                         </h4>
-                        <div className="h-[280px]">
+                        <div className="flex-1 min-h-0">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={project.steps} margin={{ top: 35, right: 30, left: 20, bottom: 20 }}>
-                                    <XAxis dataKey="name" stroke="#64748b" fontSize={11} fontWeight="bold" />
-                                    {/* Ajustado domínio do Y para dar espaço ao rótulo de 100% (Agora com 120 para garantir) */}
+                                <BarChart data={project.steps} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
+                                    <XAxis dataKey="name" stroke="#64748b" fontSize={9} fontWeight="bold" />
                                     <YAxis domain={[0, 120]} hide />
-                                    <Bar dataKey="perc" radius={[8, 8, 0, 0]} barSize={50}>
+                                    <Bar dataKey="perc" radius={[4, 4, 0, 0]} barSize={40}>
                                         {project.steps.map((_, i) => <Cell key={i} fill={getBuColor(project.bu || '')} />)}
-                                        <LabelList dataKey="perc" position="top" fill="#fff" fontSize={16} fontWeight="black" formatter={(v:number) => `${v}%`} offset={10} />
+                                        <LabelList dataKey="perc" position="top" fill="#fff" fontSize={12} fontWeight="black" formatter={(v:number) => `${v}%`} offset={5} />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
@@ -1127,19 +1236,19 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
             {/* FULL SCREEN OVERLAY */}
             {isFullScreen && (
-                <div className="fixed inset-0 bg-nexus-900 z-[1000] flex flex-col overflow-hidden">
+                <div className="fixed inset-0 bg-nexus-900 z-[1000] flex flex-col overflow-hidden p-1 md:p-2">
                     {/* Header Slide */}
-                    <div className="h-20 border-b border-nexus-800 px-12 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-white italic">N</div>
-                            <span className="text-nexus-500 font-black uppercase text-xs tracking-widest">Nexus Intelligence Platform — Teleinfo Engenharia</span>
+                    <div className="h-10 border-b border-nexus-800 px-4 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center font-black text-white italic text-xs">N</div>
+                            <span className="text-nexus-500 font-black uppercase text-[8px] tracking-widest">Nexus Intelligence Platform</span>
                         </div>
-                        <button onClick={exitPresentation} className="text-nexus-500 hover:text-white transition-colors p-2"><X size={28} /></button>
+                        <button onClick={exitPresentation} className="text-nexus-500 hover:text-white transition-colors p-1"><X size={16} /></button>
                     </div>
 
                     {/* Slide Content */}
-                    <div className="flex-1 px-20 py-12 relative overflow-hidden flex flex-col items-center justify-center">
-                        <div className="w-full max-w-6xl h-full">
+                    <div className="flex-1 px-1 py-1 relative overflow-hidden flex flex-col items-center justify-center min-h-0">
+                        <div className="w-full max-w-6xl h-full overflow-hidden">
                            {renderSlide()}
                         </div>
                     </div>
@@ -1153,14 +1262,14 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                     )}
 
                     {/* Footer Slide */}
-                    <div className="h-24 border-t border-nexus-800 px-12 flex items-center justify-between">
+                    <div className="h-12 border-t border-nexus-800 px-4 flex items-center justify-between shrink-0">
                         <div className="flex gap-2">
-                            <button onClick={prevSlide} className="p-4 bg-nexus-800 hover:bg-nexus-700 text-white rounded-full transition-all active:scale-90"><ChevronLeft size={24} /></button>
-                            <button onClick={nextSlide} className="p-4 bg-nexus-800 hover:bg-nexus-700 text-white rounded-full transition-all active:scale-90"><ChevronRight size={24} /></button>
+                            <button onClick={prevSlide} className="p-2 bg-nexus-800 hover:bg-nexus-700 text-white rounded-full transition-all active:scale-90"><ChevronLeft size={16} /></button>
+                            <button onClick={nextSlide} className="p-2 bg-nexus-800 hover:bg-nexus-700 text-white rounded-full transition-all active:scale-90"><ChevronRight size={16} /></button>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="text-white font-black text-xl italic">{currentSlide + 1} / {slidesCount}</span>
-                            <div className="w-48 h-1 bg-nexus-800 mt-2 rounded-full overflow-hidden">
+                            <span className="text-white font-black text-sm italic">{currentSlide + 1} / {slidesCount}</span>
+                            <div className="w-24 h-1 bg-nexus-800 mt-1 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${((currentSlide + 1) / slidesCount) * 100}%` }} />
                             </div>
                         </div>
@@ -1247,13 +1356,22 @@ export const TeleinfoReport: React.FC = () => {
                   <h2 className="text-2xl font-bold text-white tracking-tight">Relatórios & Auditoria IA</h2>
                   <p className="text-nexus-400 text-sm">Visão executiva e auditoria de obras Teleinfo</p>
                 </div>
-                <div className="flex bg-nexus-800 p-1.5 rounded-xl border border-nexus-700 shadow-xl">
-                    {['dashboard', 'monitoring', 'presentation'].map(tab => (
-                        <button key={tab} onClick={() => setActiveTab(tab as any)}
-                            className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-500 hover:text-white'}`}>
-                            {tab === 'dashboard' ? 'Geral' : tab === 'monitoring' ? 'Auditoria' : 'Slides'}
-                        </button>
-                    ))}
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => window.location.reload()}
+                        title="Sincronizar com Banco de Dados"
+                        className="p-2.5 bg-nexus-800 hover:bg-nexus-700 text-nexus-400 hover:text-white rounded-xl border border-nexus-700 transition-all active:scale-95 flex items-center gap-2 text-xs font-black uppercase"
+                    >
+                        <RefreshCw size={16} /> Sincronizar
+                    </button>
+                    <div className="flex bg-nexus-800 p-1.5 rounded-xl border border-nexus-700 shadow-xl">
+                        {['dashboard', 'monitoring', 'presentation'].map(tab => (
+                            <button key={tab} onClick={() => setActiveTab(tab as any)}
+                                className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-500 hover:text-white'}`}>
+                                {tab === 'dashboard' ? 'Geral' : tab === 'monitoring' ? 'Auditoria' : 'Slides'}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
             <div className="flex-1 min-h-0">
