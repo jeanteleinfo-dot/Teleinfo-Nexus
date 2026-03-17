@@ -13,6 +13,16 @@ import {
 import Markdown from 'react-markdown';
 import Papa from 'papaparse';
 import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
+
+declare global {
+  interface Window {
+    aistudio: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
+
 import { supabase, syncToSupabase, fetchFromSupabase, useSupabaseData } from '../services/supabase';
 import { generateSeniorPlanningAuditReport } from '../services/geminiService';
 
@@ -1183,13 +1193,35 @@ export const TeleinfoReport: React.FC = () => {
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
     const handleGenerateAiReport = async (project: DetailedProject) => {
+        console.log("Iniciando geração de relatório para:", project.name);
+        
         setIsGeneratingReport(true);
         try {
             const report = await generateSeniorPlanningAuditReport(project);
+            
+            if (report.startsWith("Erro: API Key não configurada")) {
+                alert("Chave de API não configurada.\n\nPor favor, siga estes passos:\n1. Clique no ícone de engrenagem (Settings) no canto superior direito.\n2. Vá em 'Secrets'.\n3. Adicione um segredo chamado GEMINI_API_KEY.\n4. Cole o valor da sua chave e salve.");
+                
+                if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+                    const confirmSelection = window.confirm("Deseja abrir o seletor de chaves da plataforma agora?");
+                    if (confirmSelection) {
+                        await window.aistudio.openSelectKey();
+                    }
+                }
+                setIsGeneratingReport(false);
+                return;
+            }
+            
+            if (report.startsWith("Erro ao gerar relatório")) {
+                alert(report);
+                setIsGeneratingReport(false);
+                return;
+            }
+            
             setAiReport({ content: report, projectName: project.name });
         } catch (error) {
-            console.error(error);
-            alert("Erro ao gerar relatório de auditoria.");
+            console.error("Erro na geração do relatório:", error);
+            alert("Ocorreu um erro inesperado ao gerar o relatório. Verifique o console para detalhes técnicos.");
         } finally {
             setIsGeneratingReport(false);
         }

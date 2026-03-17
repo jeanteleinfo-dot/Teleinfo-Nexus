@@ -1,12 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { Project, DetailedProject } from "../types";
 
-let aiInstance: GoogleGenAI | null = null;
-
 const getAI = () => {
-  if (aiInstance) return aiInstance;
-  
   // Try platform keys first
+  // process.env.API_KEY is injected by the platform key selection dialog
+  // process.env.GEMINI_API_KEY is the standard secret name
   const apiKey = (typeof process !== 'undefined' && process.env ? (process.env.GEMINI_API_KEY || process.env.API_KEY) : null) 
     || ((import.meta as any).env ? (import.meta as any).env.VITE_GEMINI_API_KEY : null)
     || '';
@@ -16,8 +14,8 @@ const getAI = () => {
     return null;
   }
   
-  aiInstance = new GoogleGenAI({ apiKey });
-  return aiInstance;
+  // Always create a new instance to ensure we use the most up-to-date key from the dialog
+  return new GoogleGenAI({ apiKey });
 };
 
 export const generateExecutiveSummary = async (contextData: string): Promise<string> => {
@@ -118,7 +116,7 @@ export const generateDetailedProjectRiskAnalysis = async (project: DetailedProje
 
 export const generateSeniorPlanningAuditReport = async (project: DetailedProject): Promise<string> => {
   const ai = getAI();
-  if (!ai) return "Erro: API Key não configurada.";
+  if (!ai) return "Erro: API Key não configurada. Por favor, configure a GEMINI_API_KEY nos segredos do projeto.";
 
   const calculateTimeProgress = (startStr: string, endStr: string) => {
     if (!startStr || !endStr) return 0;
@@ -133,26 +131,39 @@ export const generateSeniorPlanningAuditReport = async (project: DetailedProject
   };
 
   const timeProgress = calculateTimeProgress(project.start, project.end);
-  const avgExec = project.steps.length > 0 ? project.steps.reduce((acc, s) => acc + s.perc, 0) / project.steps.length : 0;
+  const steps = project.steps || [];
+  const avgExec = steps.length > 0 ? steps.reduce((acc, s) => acc + s.perc, 0) / steps.length : 0;
+  const sold = project.soldHours || { infra: 0, sse: 0, ti: 0 };
+  const used = project.usedHours || { infra: 0, sse: 0, ti: 0 };
 
-  const prompt = `Engenheiro AI Planejamento Sênior, Especialista em Custos e Auditor de Obras. Sua função é analisar os indicadores de um projeto de engenharia/tecnologia e emitir um relatório técnico gerencial. O foco é cruzar os dados de prazo (tempo decorrido), avanço físico da obra e o consumo de Horas-Homem (H/H) em três frentes: Infraestrutura, Segurança e Tecnologia.
+  const prompt = `Engenheiro AI Planejamento Sênior, Especialista em Custos e Auditor de Obras. Sua função é analisar os indicadores de um projeto de engenharia/tecnologia e emitir um relatório técnico gerencial. 
+
+O foco é cruzar os dados de prazo (tempo decorrido), avanço físico da obra e o consumo de Horas-Homem (H/H) em três frentes: Infraestrutura, Segurança e Tecnologia.
 
 **Fator Crítico de Auditoria:**
-Considere que, historicamente neste projeto, **80% dos atrasos e do consumo excedente de H/H são decorrentes de inclusões de trabalho fora do escopo original (Extra-Escopo)**.
+1. Analise todo o histórico do projeto contido nos dados abaixo.
+2. Considere que, historicamente neste projeto, **80% dos atrasos e do consumo excedente de H/H são decorrentes de inclusões de trabalho fora do escopo original (Extra-Escopo)**.
+3. **AVALIAÇÃO ESPECIAL:** Avalie se o volume de horas/obra contratada foi o ideal para a complexidade apresentada ou se houve subdimensionamento no planejamento inicial.
 
 Dados do Projeto:
 Projeto: ${project.name}
-Centro de Custo / BU: ${project.costCenter} / ${project.bu}
-Período: ${project.start} a ${project.end}
+Centro de Custo / BU: ${project.costCenter || 'N/A'} / ${project.bu || 'N/A'}
+Período: ${project.start || 'N/A'} a ${project.end || 'N/A'}
 Tempo de Cronograma Decorrido: ${timeProgress}%
 Avanço Físico Total (Fases): ${avgExec.toFixed(2)}%
 
-Gestão de H/H (Vendida vs. Utilizada):
-Infraestrutura: Vendida = ${project.soldHours.infra} | Utilizada = ${project.usedHours.infra}
-Segurança (SEC): Vendida = ${project.soldHours.sse} | Utilizada = ${project.usedHours.sse}
-Tecnologia (TI): Vendida = ${project.soldHours.ti} | Utilizada = ${project.usedHours.ti}
+Histórico de Fases:
+${steps.length > 0 ? steps.map(s => `- ${s.name}: ${s.perc}% concluído`).join('\n') : 'Nenhuma fase cadastrada.'}
 
-Observações e Pontos de Atenção (Informados pela Equipe):
+Gestão de H/H (Vendida vs. Utilizada):
+Infraestrutura: Vendida = ${sold.infra} | Utilizada = ${used.infra}
+Segurança (SEC): Vendida = ${sold.sse} | Utilizada = ${used.sse}
+Tecnologia (TI): Vendida = ${sold.ti} | Utilizada = ${used.ti}
+
+${project.productionData && project.productionData.length > 0 ? `Histórico de Produção (Meta vs Realizado):
+${project.productionData.map(d => `- Data: ${d.date} | Meta: ${d.meta} | Realizado: ${d.realized}`).join('\n')}` : ''}
+
+Observações e Pontos de Atenção (Informados pela Equipe - CAMPO CRÍTICO):
 ${project.observations || 'Nenhuma observação adicional informada.'}
 
 Sua Tarefa:
@@ -164,11 +175,14 @@ Avalie a saúde geral do projeto comparando o Tempo Decorrido com o Avanço Fís
 2. Análise de Desempenho de H/H e Impacto de Escopo
 Avalie o consumo de horas de cada disciplina. Atribua o desvio encontrado ao fator de **80% de trabalho fora do escopo**. Destaque o impacto financeiro e operacional dessa variação.
 
-3. Projeção do H/H Ideal e Sugestão de Aditivo
-Com base no Avanço Físico atual (${avgExec.toFixed(2)}%), estime o limite "ideal" de horas para o escopo original. Em seguida, **calcule e sugira explicitamente o volume de horas adicionais que deve ser cobrado em uma proposta de aditivo** para cobrir os 80% de desvios por extra-escopo, visando a saúde financeira do contrato.
+3. Avaliação do Dimensionamento Contratual (NOVO)
+Analise se o número de horas e a equipe contratada originalmente foram ideais. Identifique se o projeto nasceu subdimensionado ou se os desvios são puramente por solicitações extras.
 
-4. Sugestões e Plano de Ação
-Liste de 3 a 4 recomendações práticas para regularizar o contrato (ex: formalização de aditivos, controle rígido de escopo) e para manter o bom desempenho técnico.
+4. Projeção do H/H Ideal e Sugestão de Aditivo
+Com base no Avanço Físico atual (${avgExec.toFixed(2)}%), estime o limite "ideal" de horas para o escopo original. Em seguida, **calcule e sugira explicitamente o volume de horas adicionais que deve ser cobrado em uma proposta de aditivo** para cobrir os 80% de desvios por extra-escopo.
+
+5. Sugestões e Plano de Ação
+Liste de 3 a 4 recomendações práticas para regularizar o contrato e para manter o bom desempenho técnico.
 
 Diretrizes de Estilo:
 Seja analítico, direto e profissional. Use negrito para destacar números, alertas e a sugestão de cobrança adicional.`;
@@ -182,6 +196,6 @@ Seja analítico, direto e profissional. Use negrito para destacar números, aler
     return response.text || "Relatório de auditoria indisponível.";
   } catch (error) {
     console.error(error);
-    return "Erro ao gerar relatório de auditoria sênior.";
+    return "Erro ao gerar relatório de auditoria sênior. Verifique se a API Key está correta.";
   }
 };
