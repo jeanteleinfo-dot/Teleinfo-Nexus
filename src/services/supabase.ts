@@ -22,15 +22,20 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
  */
 export const syncToSupabase = async (tableName: string, data: any[]) => {
   try {
+    console.log(`Sincronizando ${data.length} itens para a tabela ${tableName}...`);
     const { error } = await supabase
       .from(tableName)
       .upsert(data, { onConflict: 'id' });
     
-    if (error) throw error;
+    if (error) {
+      console.error(`Erro ao sincronizar ${tableName}:`, error.message, error.details);
+      return false;
+    }
+    console.log(`Sincronização de ${tableName} concluída com sucesso.`);
+    return true;
   } catch (err) {
-    console.error(`Sincronização ${tableName} falhou:`, err);
-    // We don't alert here to avoid spamming, but we could if needed.
-    // In a real app, we'd have a toast notification system.
+    console.error(`Falha crítica na sincronização de ${tableName}:`, err);
+    return false;
   }
 };
 
@@ -39,15 +44,20 @@ export const syncToSupabase = async (tableName: string, data: any[]) => {
  */
 export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | null> => {
   try {
+    console.log(`Buscando dados da tabela ${tableName}...`);
     const { data, error } = await supabase
       .from(tableName)
       .select('*')
       .order('id', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      console.error(`Erro ao buscar em ${tableName}:`, error.message, error.details);
+      return null;
+    }
+    console.log(`Busca em ${tableName} concluída. ${data?.length || 0} itens encontrados.`);
     return data as T[];
   } catch (err) {
-    console.error(`Busca em ${tableName} falhou:`, err);
+    console.error(`Falha crítica na busca em ${tableName}:`, err);
     return null;
   }
 };

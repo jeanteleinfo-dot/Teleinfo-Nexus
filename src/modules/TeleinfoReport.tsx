@@ -256,12 +256,13 @@ const GeneralDashboardView: React.FC = () => {
 };
 
 interface MonitoringProps {
+    projects: DetailedProject[];
+    setProjects: React.Dispatch<React.SetStateAction<DetailedProject[]>>;
     onGenerateAiReport: (project: DetailedProject) => void;
     isGeneratingReport: boolean;
 }
 
-const MonitoringView: React.FC<MonitoringProps> = ({ onGenerateAiReport, isGeneratingReport }) => {
-    const [projects, setProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
+const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGenerateAiReport, isGeneratingReport }) => {
     const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
     const [editingProject, setEditingProject] = useState<DetailedProject | null>(null);
     const [tempStepName, setTempStepName] = useState('');
@@ -1174,7 +1175,7 @@ const EscapeIcon = () => (
 export const TeleinfoReport: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
     const [generalProjects] = useSupabaseData<any[]>('general_projects', []);
-    const [detailedProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
+    const [detailedProjects, setDetailedProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
     const [buyingStatus] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
 
     // AI Report State moved to parent
@@ -1227,6 +1228,8 @@ export const TeleinfoReport: React.FC = () => {
                 {activeTab === 'dashboard' && <GeneralDashboardView />}
                 {activeTab === 'monitoring' && (
                     <MonitoringView 
+                        projects={detailedProjects}
+                        setProjects={setDetailedProjects}
                         onGenerateAiReport={handleGenerateAiReport}
                         isGeneratingReport={isGeneratingReport}
                     />
