@@ -228,8 +228,8 @@ export const generateLessonsLearnedReport = async (projects: DetailedProject[]):
   }).join('\n---\n');
 
   const prompt = `Você é um Consultor de Gestão de Projetos e Especialista em Melhoria Contínua (Lean Six Sigma).
-  Sua tarefa é analisar um conjunto de projetos FINALIZADOS da Teleinfo e gerar um Relatório de Lições Aprendidas Consolidado.
-  
+  Sua tarefa é analisar um conjunto de projetos FINALIZADOS da Teleinfo e gerar um Relatório de Lições Aprendidas Consolidado seguindo EXATAMENTE a estrutura abaixo.
+
   Objetivo da Análise:
   1. Avaliar a precisão das estimativas iniciais (Tempo, Horas e Valores).
   2. Identificar padrões de desvios (onde estamos errando mais?).
@@ -239,25 +239,41 @@ export const generateLessonsLearnedReport = async (projects: DetailedProject[]):
   Dados dos Projetos Selecionados:
   ${projectsData}
 
-  Estrutura do Relatório (Markdown):
+  Estrutura OBRIGATÓRIA do Relatório (Markdown):
+  
+  Como Consultor de Gestão de Projetos e Especialista Lean Six Sigma, realizei a análise técnica do(s) projeto(s) selecionado(s). Embora o portfólio atual conte com uma amostra específica, os dados fornecidos são ricos em indicadores de falhas de processo e gestão de riscos operacionais.
+  Abaixo, apresento o Relatório Consolidado de Lições Aprendidas.
+
   # Relatório Consolidado de Lições Aprendidas - Nexus Intelligence
   
   ## 1. Resumo do Portfólio Analisado
-  Breve visão geral dos projetos selecionados e seu desempenho médio.
+  O projeto analisado apresenta um cenário de [DESCREVER CENÁRIO BASEADO NOS DADOS].
+  - **Status de Execução:** [X]% concluído.
+  - **Eficiência de Mão de Obra:** Utilização de [X]% das horas vendidas ([X]h de [X]h).
+  - **Desempenho Global:** [DESCREVER DESEMPENHO GERAL].
 
   ## 2. Análise de Estimativas vs. Realidade
-  - **Tempo/Cronograma:** Fomos precisos nas datas?
-  - **Recursos (H/H):** Onde houve maior estouro de horas?
-  - **Financeiro:** A margem planejada foi mantida?
+  - **Tempo/Cronograma:** [ANÁLISE DE ADERÊNCIA AO CRONOGRAMA].
+  - **Recursos (H/H):** [ANÁLISE DE SUPERESTIMATIVA OU SUBDIMENSIONAMENTO].
+  - **Financeiro:** [ANÁLISE DE MARGEM E CUSTOS DE NÃO-QUALIDADE].
 
   ## 3. Padrões Identificados e Causas Raiz
-  Identifique o que se repete entre os projetos (ex: subdimensionamento em TI, atrasos em Infra, etc).
+  A análise através da técnica dos "5 Porquês" e do Diagrama de Ishikawa aponta para os seguintes padrões:
+  1. [PADRÃO 1]: [DESCRIÇÃO].
+     - **Causa Raiz:** [CAUSA].
+  2. [PADRÃO 2]: [DESCRIÇÃO].
+     - **Causa Raiz:** [CAUSA].
 
   ## 4. Lições Aprendidas e Recomendações de Ouro
-  O que devemos fazer diferente no PRÓXIMO orçamento? Como evitar os erros do passado?
+  Para os próximos orçamentos e planejamentos, as seguintes diretrizes devem ser institucionalizadas:
+  - **[DIRETRIZ 1]:** [DESCRIÇÃO DETALHADA].
+  - **[DIRETRIZ 2]:** [DESCRIÇÃO DETALHADA].
+  - **[DIRETRIZ 3]:** [DESCRIÇÃO DETALHADA].
 
   ## 5. Conclusão Estratégica
-  Um parecer final para a diretoria sobre a maturidade da gestão desses projetos.
+  [PARECER FINAL PARA A DIRETORIA SOBRE MATURIDADE E EVOLUÇÃO].
+
+  **Parecer Final:** [FRASE DE IMPACTO RESUMINDO O RESULTADO E ALERTA CRÍTICO].
 
   Responda em Português do Brasil, de forma técnica, executiva e propositiva.`;
 

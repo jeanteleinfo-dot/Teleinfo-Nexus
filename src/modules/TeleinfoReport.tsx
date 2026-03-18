@@ -1579,30 +1579,35 @@ const EscapeIcon = () => (
 
 const PDFReportTemplate: React.FC<{ content: string; projectName: string; id: string }> = ({ content, projectName, id }) => {
     return (
-        <div id={id} className="fixed -left-[9999px] top-0 w-[800px] bg-white p-12 text-slate-900 prose prose-slate max-w-none">
-            <div className="flex justify-between items-center border-b-2 border-blue-600 pb-6 mb-8">
-                <div className="font-black text-3xl text-blue-900 tracking-tighter">
-                    NEXUS <span className="text-blue-500">INTELLIGENCE</span>
+        <div id={id} className="fixed -left-[9999px] top-0 w-[800px] bg-white p-20 text-slate-900 prose prose-slate max-w-none font-serif">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-8 mb-12">
+                <div className="font-black text-2xl text-slate-900 tracking-tighter">
+                    NEXUS <span className="text-blue-600">INTELLIGENCE</span>
                 </div>
-                <div className="text-right text-[10px] text-slate-400 font-bold uppercase">
-                    Relatório de Auditoria Estratégica<br/>
+                <div className="text-right text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                    Documento de Auditoria Técnica<br/>
                     {new Date().toLocaleDateString('pt-BR')}
                 </div>
             </div>
             
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.08] rotate-[-45deg] z-[-1] whitespace-nowrap text-8xl font-black select-none">
-                NEXUS INTELLIGENCE
-            </div>
-
-            <div className="min-h-[600px] relative z-10">
+            <div className="min-h-[900px] relative z-10 
+                prose-h1:text-slate-900 prose-h1:font-black prose-h1:text-xl prose-h1:mb-10 prose-h1:mt-0
+                prose-h2:text-slate-900 prose-h2:font-black prose-h2:text-lg prose-h2:mt-12 prose-h2:mb-6
+                prose-h3:text-slate-800 prose-h3:font-bold prose-h3:text-base prose-h3:mt-8 prose-h3:mb-4
+                prose-p:text-slate-800 prose-p:leading-relaxed prose-p:mb-6 prose-p:text-base
+                prose-li:text-slate-800 prose-li:mb-3 prose-li:text-base
+                prose-strong:text-slate-900 prose-strong:font-bold">
                 <Markdown>{content}</Markdown>
             </div>
 
-            <div className="mt-16 pt-10 border-t border-slate-200 text-center relative z-10">
-                <div className="mb-10"></div>
-                <div className="font-bold text-sm text-slate-900 italic">Assinado,</div>
-                <div className="text-xs text-slate-600 mt-2 font-medium">
-                    Consultor de Gestão de Projetos & Especialista Lean Six Sigma Nexus Intelligence
+            <div className="mt-20 pt-12 border-t border-slate-200 flex flex-col items-center relative z-10">
+                <div className="text-center">
+                    <div className="font-bold text-sm text-slate-900 italic mb-4">Relatório validado e auditado eletronicamente.</div>
+                    <div className="w-40 h-px bg-slate-300 mb-4 mx-auto"></div>
+                    <div className="text-xs text-slate-500 font-bold uppercase tracking-widest">
+                        Consultor de Gestão de Projetos & Especialista Lean Six Sigma
+                    </div>
+                    <div className="text-blue-600 font-black text-sm mt-1">Nexus Intelligence</div>
                 </div>
             </div>
         </div>
@@ -2050,15 +2055,34 @@ export const TeleinfoReport: React.FC = () => {
                 scale: 2,
                 useCORS: true,
                 logging: false,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                windowWidth: 800 // Match the template width
             });
             
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
             
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            const imgWidth = pdfWidth;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            // Add first page
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pdfHeight;
+
+            // Add subsequent pages if content is longer than one page
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+            
             pdf.save(`Relatorio_Nexus_${projectName.replace(/\s+/g, '_')}.pdf`);
         } catch (error) {
             console.error("Erro ao exportar PDF:", error);
