@@ -1385,7 +1385,9 @@ const EscapeIcon = () => (
 const LessonsLearnedView: React.FC<{ 
     projects: DetailedProject[]; 
     setProjects: React.Dispatch<React.SetStateAction<DetailedProject[]>>;
-}> = ({ projects, setProjects }) => {
+    hasApiKey: boolean;
+    onOpenKeySelector: () => void;
+}> = ({ projects, setProjects, hasApiKey, onOpenKeySelector }) => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
@@ -1402,6 +1404,17 @@ const LessonsLearnedView: React.FC<{
         if (selectedIds.length === 0) {
             alert("Selecione ao menos uma obra para análise.");
             return;
+        }
+
+        // Verificar chave antes de gerar
+        if (!hasApiKey) {
+            const confirm = window.confirm("Para usar a IA, você precisa selecionar uma chave de API. Abrir seletor agora?");
+            if (confirm) {
+                onOpenKeySelector();
+                return;
+            } else {
+                return;
+            }
         }
 
         setIsAnalyzing(true);
@@ -1545,6 +1558,7 @@ export const TeleinfoReport: React.FC = () => {
     const [aiReport, setAiReport] = useState<{ content: string; projectName: string } | null>(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+    const [showDbHelp, setShowDbHelp] = useState(false);
 
     useEffect(() => {
         const checkKey = async () => {
@@ -1558,9 +1572,17 @@ export const TeleinfoReport: React.FC = () => {
 
     const handleOpenKeySelector = async () => {
         if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-            await window.aistudio.openSelectKey();
-            // Assumimos sucesso conforme diretrizes da plataforma
-            setHasApiKey(true);
+            try {
+                await window.aistudio.openSelectKey();
+                // Assumimos sucesso conforme diretrizes da plataforma
+                setHasApiKey(true);
+            } catch (err) {
+                console.error("Erro ao abrir seletor de chaves:", err);
+                alert("Não foi possível abrir o seletor de chaves. Verifique se o seu navegador não bloqueou um popup.");
+            }
+        } else {
+            console.warn("Plataforma AI Studio não detectada ou ferramentas ausentes.");
+            alert("As ferramentas de IA da plataforma não foram detectadas. Se você estiver em um ambiente local, use o arquivo .env.");
         }
     };
 
@@ -1634,6 +1656,13 @@ export const TeleinfoReport: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-3">
                     <button 
+                        onClick={() => setShowDbHelp(true)}
+                        title="Ajuda com Erros de Banco"
+                        className="p-2.5 bg-nexus-800 hover:bg-nexus-700 text-yellow-500 rounded-xl border border-nexus-700 transition-all active:scale-95 flex items-center gap-2 text-xs font-black uppercase"
+                    >
+                        <AlertTriangle size={16} /> Erro de Banco?
+                    </button>
+                    <button 
                         onClick={handleOpenKeySelector}
                         title="Configurar Chave de API Gemini"
                         className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center gap-2 text-xs font-black uppercase ${
@@ -1684,9 +1713,56 @@ export const TeleinfoReport: React.FC = () => {
                     <LessonsLearnedView 
                         projects={detailedProjects}
                         setProjects={setDetailedProjects}
+                        hasApiKey={hasApiKey}
+                        onOpenKeySelector={handleOpenKeySelector}
                     />
                 )}
             </div>
+
+            {/* DB Help Modal */}
+            {showDbHelp && (
+                <div className="fixed inset-0 bg-black/80 z-[3000] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-nexus-800 border border-nexus-700 rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col overflow-hidden">
+                        <div className="bg-yellow-600 p-6 flex justify-between items-center text-white">
+                            <div className="flex items-center gap-3">
+                                <AlertTriangle size={32} />
+                                <h3 className="font-black text-xl uppercase italic">Corrigir Erro de Banco</h3>
+                            </div>
+                            <button onClick={() => setShowDbHelp(false)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={24}/></button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <p className="text-nexus-300">Se você está vendo o erro <strong>"Could not find column"</strong>, siga estes passos no seu painel do Supabase:</p>
+                            
+                            <div className="space-y-4">
+                                <div className="bg-nexus-900 p-4 rounded-xl border border-nexus-700">
+                                    <p className="text-xs font-bold text-nexus-500 uppercase mb-2">1. Execute este SQL no SQL Editor:</p>
+                                    <pre className="text-[10px] text-green-400 font-mono overflow-x-auto p-2 bg-black/30 rounded">
+{`ALTER TABLE detailed_projects 
+ADD COLUMN IF NOT EXISTS totalSoldValue NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS totalCostValue NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS totalUsedValue NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`}
+                                    </pre>
+                                </div>
+                                
+                                <div className="bg-nexus-900 p-4 rounded-xl border border-nexus-700">
+                                    <p className="text-xs font-bold text-nexus-500 uppercase mb-2">2. Force a atualização do Cache:</p>
+                                    <pre className="text-[10px] text-blue-400 font-mono p-2 bg-black/30 rounded">
+{`NOTIFY pgrst, 'reload schema';`}
+                                    </pre>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl">
+                                <p className="text-xs text-blue-300"><strong>Dica:</strong> Após rodar os comandos, recarregue esta página segurando a tecla <strong>SHIFT</strong>.</p>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex justify-end bg-nexus-800">
+                            <button onClick={() => setShowDbHelp(false)} className="bg-nexus-700 hover:bg-nexus-600 text-white px-8 py-2 rounded-xl font-bold transition-all">Entendi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* AI Report Modal - Now in Parent */}
             {aiReport && (
