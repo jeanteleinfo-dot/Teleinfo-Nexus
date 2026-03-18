@@ -2,10 +2,14 @@ import { GoogleGenAI } from "@google/genai";
 import { Project, DetailedProject } from "../types";
 
 const getAI = () => {
-  // Try platform keys first
+  // 1. Try manual key from localStorage (for deployed apps)
+  const manualKey = typeof window !== 'undefined' ? localStorage.getItem('NEXUS_GEMINI_API_KEY') : null;
+  
+  // 2. Try platform keys
   // process.env.API_KEY is injected by the platform key selection dialog
   // process.env.GEMINI_API_KEY is the standard secret name
-  const apiKey = (typeof process !== 'undefined' && process.env ? (process.env.GEMINI_API_KEY || process.env.API_KEY) : null) 
+  const apiKey = manualKey 
+    || (typeof process !== 'undefined' && process.env ? (process.env.GEMINI_API_KEY || process.env.API_KEY) : null) 
     || ((import.meta as any).env ? (import.meta as any).env.VITE_GEMINI_API_KEY : null)
     || '';
 

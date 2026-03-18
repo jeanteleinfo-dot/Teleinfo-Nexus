@@ -9,7 +9,7 @@ import {
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
   History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
   FileSearch, Loader2, Package, CheckCircle, Info, RefreshCw, Rocket, DollarSign,
-  FolderArchive, CheckSquare
+  FolderArchive, CheckSquare, Key
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import Papa from 'papaparse';
@@ -1559,9 +1559,18 @@ export const TeleinfoReport: React.FC = () => {
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
     const [hasApiKey, setHasApiKey] = useState<boolean>(false);
     const [showDbHelp, setShowDbHelp] = useState(false);
+    const [showManualKeyModal, setShowManualKeyModal] = useState(false);
+    const [manualKeyInput, setManualKeyInput] = useState('');
 
     useEffect(() => {
         const checkKey = async () => {
+            // Check manual key first
+            const manualKey = localStorage.getItem('NEXUS_GEMINI_API_KEY');
+            if (manualKey) {
+                setHasApiKey(true);
+                return;
+            }
+
             if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
                 const selected = await window.aistudio.hasSelectedApiKey();
                 setHasApiKey(selected);
@@ -1570,19 +1579,29 @@ export const TeleinfoReport: React.FC = () => {
         checkKey();
     }, []);
 
+    const handleSaveManualKey = () => {
+        if (!manualKeyInput.trim()) {
+            alert("Por favor, insira uma chave válida.");
+            return;
+        }
+        localStorage.setItem('NEXUS_GEMINI_API_KEY', manualKeyInput.trim());
+        setHasApiKey(true);
+        setShowManualKeyModal(false);
+        alert("Chave de API salva com sucesso no seu navegador!");
+    };
+
     const handleOpenKeySelector = async () => {
         if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
             try {
                 await window.aistudio.openSelectKey();
-                // Assumimos sucesso conforme diretrizes da plataforma
                 setHasApiKey(true);
             } catch (err) {
                 console.error("Erro ao abrir seletor de chaves:", err);
-                alert("Não foi possível abrir o seletor de chaves. Verifique se o seu navegador não bloqueou um popup.");
+                setShowManualKeyModal(true);
             }
         } else {
-            console.warn("Plataforma AI Studio não detectada ou ferramentas ausentes.");
-            alert("As ferramentas de IA da plataforma não foram detectadas. Se você estiver em um ambiente local, use o arquivo .env.");
+            // Se não estiver no AI Studio, abre o modal manual
+            setShowManualKeyModal(true);
         }
     };
 
@@ -1718,6 +1737,58 @@ export const TeleinfoReport: React.FC = () => {
                     />
                 )}
             </div>
+
+            {/* Manual API Key Modal */}
+            {showManualKeyModal && (
+                <div className="fixed inset-0 bg-black/80 z-[4000] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-nexus-800 border border-nexus-700 rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
+                        <div className="bg-purple-600 p-6 flex justify-between items-center text-white">
+                            <div className="flex items-center gap-3">
+                                <Key size={24} />
+                                <h3 className="font-black text-lg uppercase italic">Configurar Chave Manual</h3>
+                            </div>
+                            <button onClick={() => setShowManualKeyModal(false)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={20}/></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-nexus-300 text-sm">
+                                Como você está acessando fora do AI Studio, insira sua chave do Gemini manualmente. 
+                                Ela será salva de forma segura apenas no seu navegador.
+                            </p>
+                            
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-nexus-500 uppercase tracking-widest">GEMINI_API_KEY</label>
+                                <input 
+                                    type="password"
+                                    value={manualKeyInput}
+                                    onChange={(e) => setManualKeyInput(e.target.value)}
+                                    placeholder="AIzaSy..."
+                                    className="w-full bg-nexus-900 border border-nexus-700 rounded-xl px-4 py-3 text-white focus:border-purple-500 outline-none transition-all font-mono text-sm"
+                                />
+                            </div>
+
+                            <div className="bg-nexus-900 p-3 rounded-xl border border-nexus-700">
+                                <p className="text-[10px] text-nexus-400 leading-relaxed">
+                                    <strong>Onde conseguir?</strong> Acesse <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline">aistudio.google.com</a> para gerar uma chave gratuita.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
+                            <button 
+                                onClick={() => setShowManualKeyModal(false)} 
+                                className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleSaveManualKey}
+                                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-purple-600/20 text-sm"
+                            >
+                                Salvar Chave
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* DB Help Modal */}
             {showDbHelp && (
