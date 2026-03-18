@@ -42,7 +42,6 @@ export const syncToSupabase = async (tableName: string, data: any[]) => {
     
     if (error) {
       console.error(`[Supabase] Erro ao sincronizar ${tableName}:`, error.message, error.details, error.hint);
-      window.alert(`ERRO DE BANCO DE DADOS (${tableName}):\n${error.message}\n\nDetalhes: ${error.details || 'Nenhum'}\nDica: ${error.hint || 'Nenhuma'}`);
       return false;
     }
     
@@ -50,8 +49,6 @@ export const syncToSupabase = async (tableName: string, data: any[]) => {
     return true;
   } catch (err) {
     console.error(`[Supabase] Falha crítica na sincronização de ${tableName}:`, err);
-    const msg = err instanceof Error ? err.message : 'Erro desconhecido';
-    window.alert(`FALHA CRÍTICA DE CONEXÃO:\nNão foi possível salvar os dados em ${tableName}.\n\nErro: ${msg}`);
     return false;
   }
 };

@@ -9,10 +9,12 @@ import {
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
   History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
   FileSearch, Loader2, Package, CheckCircle, Info, RefreshCw, Rocket, DollarSign,
-  FolderArchive, CheckSquare, Key
+  FolderArchive, CheckSquare, Key, FileDown
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import Papa from 'papaparse';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
 
 declare global {
@@ -136,6 +138,14 @@ const GeneralDashboardView: React.FC = () => {
         return Object.entries(bus).map(([name, value]) => ({ name, value }));
     }, [projects]);
 
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'info' | 'danger' | 'warning';
+    } | null>(null);
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -146,24 +156,36 @@ const GeneralDashboardView: React.FC = () => {
             const parsed = parseGeneralCsv(text);
             
             if (parsed.length === 0) {
-                alert("Nenhum dado encontrado no arquivo CSV.");
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Atenção",
+                    message: "Nenhum dado encontrado no arquivo CSV.",
+                    onConfirm: () => setConfirmModal(null),
+                    type: 'warning'
+                });
                 return;
             }
 
             try {
-                // Delete existing records first to avoid duplicates with new IDs
                 const { error: deleteError } = await supabase.from('general_projects').delete().neq('id', '0');
+                if (deleteError) console.error("Erro ao limpar dados antigos:", deleteError);
                 
-                if (deleteError) {
-                    console.error("Erro ao limpar dados antigos:", deleteError);
-                }
-                
-                // Update local state which triggers syncToSupabase (upsert)
                 setProjects(parsed);
-                alert(`${parsed.length} projetos importados com sucesso!`);
+                // Simple feedback
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
+                toast.innerText = `✓ ${parsed.length} projetos importados com sucesso!`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
             } catch (err) {
                 console.error("Erro na importação:", err);
-                alert("Erro ao importar dados.");
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Erro na Importação",
+                    message: "Erro ao importar dados. Verifique o console.",
+                    onConfirm: () => setConfirmModal(null),
+                    type: 'danger'
+                });
             }
         };
         reader.readAsText(file);
@@ -182,12 +204,69 @@ const GeneralDashboardView: React.FC = () => {
                         <UploadCloud size={18} /> Importar Geral CSV
                     </button>
                     {projects.length > 0 && (
-                        <button onClick={async () => { if(confirm("Apagar todos os projetos gerais?")) { await supabase.from('general_projects').delete().neq('id', '0'); setProjects([]); }}} className="p-2 bg-nexus-800 border border-nexus-700 text-red-400 rounded-lg hover:bg-red-500/10">
+                        <button 
+                            onClick={() => {
+                                setConfirmModal({
+                                    isOpen: true,
+                                    title: "Apagar Projetos",
+                                    message: "Deseja apagar todos os projetos gerais? Esta ação não pode ser desfeita.",
+                                    onConfirm: async () => {
+                                        await supabase.from('general_projects').delete().neq('id', '0');
+                                        setProjects([]);
+                                        setConfirmModal(null);
+                                    },
+                                    type: 'danger'
+                                });
+                            }} 
+                            className="p-2 bg-nexus-800 border border-nexus-700 text-red-400 rounded-lg hover:bg-red-500/10"
+                        >
                             <Trash2 size={18} />
                         </button>
                     )}
                 </div>
             </div>
+
+            {/* Modal de Confirmação Local */}
+            {confirmModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[7000] flex items-center justify-center p-4">
+                    <div className="bg-nexus-900 border border-nexus-700 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleIn">
+                        <div className={`p-6 border-b border-nexus-700 flex justify-between items-center text-white ${
+                            confirmModal.type === 'danger' ? 'bg-red-600' : 
+                            confirmModal.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                {confirmModal.type === 'danger' ? <Trash2 size={24} /> : 
+                                 confirmModal.type === 'warning' ? <AlertTriangle size={24} /> : <Info size={24} />}
+                                <h3 className="font-black text-lg uppercase italic">{confirmModal.title}</h3>
+                            </div>
+                            <button onClick={() => setConfirmModal(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={20}/></button>
+                        </div>
+                        <div className="p-8">
+                            <p className="text-white font-medium text-center">{confirmModal.message}</p>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
+                            {confirmModal.type !== 'warning' && (
+                                <button 
+                                    onClick={() => setConfirmModal(null)} 
+                                    className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                            )}
+                            <button 
+                                onClick={confirmModal.onConfirm}
+                                className={`flex-1 text-white py-3 rounded-xl font-bold transition-all shadow-lg text-sm ${
+                                    confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 
+                                    confirmModal.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-500 shadow-yellow-900/20' : 
+                                    'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
+                                }`}
+                            >
+                                {confirmModal.type === 'warning' ? 'Entendi' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div className="bg-nexus-800 p-5 rounded-xl border border-nexus-700 shadow-xl">
@@ -276,6 +355,13 @@ interface MonitoringProps {
 const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGenerateAiReport, isGeneratingReport }) => {
     const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
     const [editingProject, setEditingProject] = useState<DetailedProject | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'info' | 'danger' | 'warning';
+    } | null>(null);
     const [tempStepName, setTempStepName] = useState('');
     const [tempStepPerc, setTempStepPerc] = useState<number>(0);
 
@@ -283,7 +369,13 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
 
     const handleSave = async () => {
         if (!editingProject || !editingProject.name) {
-            alert("O nome do projeto é obrigatório.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Atenção",
+                message: "O nome do projeto é obrigatório.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'warning'
+            });
             return;
         }
         
@@ -321,7 +413,13 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
 
         } catch (err) {
             console.error("[Monitoring] Erro ao salvar:", err);
-            alert("Erro ao processar salvamento. Verifique o console para detalhes.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Erro ao Salvar",
+                message: "Erro ao processar salvamento. Verifique o console para detalhes.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'danger'
+            });
         }
     };
 
@@ -434,9 +532,16 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                         <button onClick={() => { setEditingProject(p); setViewMode('form'); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Editar Auditoria"><GanttChartSquare size={16}/></button>
                                         <button 
                                             onClick={() => { 
-                                                if(confirm(`Arquivar obra ${p.name}? Ela será movida para Lições Aprendidas.`)) {
-                                                    setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
-                                                }
+                                                setConfirmModal({
+                                                    isOpen: true,
+                                                    title: "Arquivar Obra",
+                                                    message: `Deseja arquivar a obra "${p.name}"? Ela será movida para a seção de Lições Aprendidas.`,
+                                                    onConfirm: () => {
+                                                        setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
+                                                        setConfirmModal(null);
+                                                    },
+                                                    type: 'warning'
+                                                });
                                             }} 
                                             className="p-2 text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors"
                                             title="Arquivar Obra (Finalizada)"
@@ -1382,15 +1487,56 @@ const EscapeIcon = () => (
     <div className="px-1 border border-nexus-500 rounded text-[8px] flex items-center justify-center">ESC</div>
 );
 
+const PDFReportTemplate: React.FC<{ content: string; projectName: string; id: string }> = ({ content, projectName, id }) => {
+    return (
+        <div id={id} className="fixed -left-[9999px] top-0 w-[800px] bg-white p-12 text-slate-900 prose prose-slate max-w-none">
+            <div className="flex justify-between items-center border-b-2 border-blue-600 pb-6 mb-8">
+                <div className="font-black text-3xl text-blue-900 tracking-tighter">
+                    NEXUS <span className="text-blue-500">INTELLIGENCE</span>
+                </div>
+                <div className="text-right text-[10px] text-slate-400 font-bold uppercase">
+                    Relatório de Auditoria Estratégica<br/>
+                    {new Date().toLocaleDateString('pt-BR')}
+                </div>
+            </div>
+            
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.08] rotate-[-45deg] z-[-1] whitespace-nowrap text-8xl font-black select-none">
+                NEXUS INTELLIGENCE
+            </div>
+
+            <div className="min-h-[600px] relative z-10">
+                <Markdown>{content}</Markdown>
+            </div>
+
+            <div className="mt-16 pt-10 border-t border-slate-200 text-center relative z-10">
+                <div className="mb-10"></div>
+                <div className="font-bold text-sm text-slate-900 italic">Assinado,</div>
+                <div className="text-xs text-slate-600 mt-2 font-medium">
+                    Consultor de Gestão de Projetos & Especialista Lean Six Sigma Nexus Intelligence
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const LessonsLearnedView: React.FC<{ 
     projects: DetailedProject[]; 
     setProjects: React.Dispatch<React.SetStateAction<DetailedProject[]>>;
     hasApiKey: boolean;
     onOpenKeySelector: () => void;
-}> = ({ projects, setProjects, hasApiKey, onOpenKeySelector }) => {
+    onExportPDF: (content: string, projectName: string, id: string) => Promise<void>;
+}> = ({ projects, setProjects, hasApiKey, onOpenKeySelector, onExportPDF }) => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'info' | 'danger' | 'warning';
+    } | null>(null);
 
     const archivedProjects = projects.filter(p => p.status === 'archived');
 
@@ -1402,19 +1548,29 @@ const LessonsLearnedView: React.FC<{
 
     const handleGenerateLessonsLearned = async () => {
         if (selectedIds.length === 0) {
-            alert("Selecione ao menos uma obra para análise.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Atenção",
+                message: "Selecione ao menos uma obra para análise.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'warning'
+            });
             return;
         }
 
         // Verificar chave antes de gerar
         if (!hasApiKey) {
-            const confirm = window.confirm("Para usar a IA, você precisa selecionar uma chave de API. Abrir seletor agora?");
-            if (confirm) {
-                onOpenKeySelector();
-                return;
-            } else {
-                return;
-            }
+            setConfirmModal({
+                isOpen: true,
+                title: "Configuração de IA",
+                message: "Para usar a IA, você precisa selecionar uma chave de API. Abrir seletor agora?",
+                onConfirm: () => {
+                    onOpenKeySelector();
+                    setConfirmModal(null);
+                },
+                type: 'info'
+            });
+            return;
         }
 
         setIsAnalyzing(true);
@@ -1424,7 +1580,13 @@ const LessonsLearnedView: React.FC<{
             setAnalysisResult(report);
         } catch (error) {
             console.error(error);
-            alert("Erro ao gerar análise de lições aprendidas.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Erro na Análise",
+                message: "Erro ao gerar análise de lições aprendidas. Verifique o console.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'danger'
+            });
         } finally {
             setIsAnalyzing(false);
         }
@@ -1462,23 +1624,38 @@ const LessonsLearnedView: React.FC<{
                         <h4 className="text-purple-400 font-black uppercase tracking-widest flex items-center gap-2">
                             <Bot size={20} /> Resultado da Inteligência Artificial
                         </h4>
-                        <button 
-                            onClick={() => {
-                                const blob = new Blob([analysisResult], { type: 'text/markdown' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `Licoes_Aprendidas_Nexus_${new Date().toISOString().split('T')[0]}.md`;
-                                a.click();
-                            }}
-                            className="text-nexus-400 hover:text-white flex items-center gap-1 text-xs font-bold"
-                        >
-                            <Download size={14} /> Exportar MD
-                        </button>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => {
+                                    const blob = new Blob([analysisResult], { type: 'text/markdown' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `Licoes_Aprendidas_Nexus_${new Date().toISOString().split('T')[0]}.md`;
+                                    a.click();
+                                }}
+                                className="text-nexus-400 hover:text-white flex items-center gap-1 text-xs font-bold"
+                            >
+                                <Download size={14} /> MD
+                            </button>
+                            <button 
+                                onClick={async () => {
+                                    setIsExportingPDF(true);
+                                    await onExportPDF(analysisResult, "Licoes_Aprendidas", "pdf-lessons-learned");
+                                    setIsExportingPDF(false);
+                                }}
+                                disabled={isExportingPDF}
+                                className="text-nexus-400 hover:text-white flex items-center gap-1 text-xs font-bold"
+                            >
+                                {isExportingPDF ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+                                PDF
+                            </button>
+                        </div>
                     </div>
                     <div className="prose prose-invert max-w-none prose-headings:text-purple-400 prose-strong:text-white prose-p:text-nexus-300">
                         <Markdown>{analysisResult}</Markdown>
                     </div>
+                    <PDFReportTemplate content={analysisResult} projectName="Licoes_Aprendidas" id="pdf-lessons-learned" />
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1519,9 +1696,16 @@ const LessonsLearnedView: React.FC<{
                                     <button 
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if(confirm(`Restaurar obra ${p.name} para Auditoria Ativa?`)) {
-                                                setProjects(prev => prev.map(x => x.id === p.id ? { ...x, status: 'active' } : x));
-                                            }
+                                            setConfirmModal({
+                                                isOpen: true,
+                                                title: "Restaurar Obra",
+                                                message: `Restaurar obra ${p.name} para Auditoria Ativa?`,
+                                                onConfirm: () => {
+                                                    setProjects(prev => prev.map(x => x.id === p.id ? { ...x, status: 'active' } : x));
+                                                    setConfirmModal(null);
+                                                },
+                                                type: 'info'
+                                            });
                                         }}
                                         className="text-[9px] font-bold text-blue-400 hover:text-blue-300 uppercase tracking-tighter"
                                     >
@@ -1530,9 +1714,16 @@ const LessonsLearnedView: React.FC<{
                                     <button 
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if(confirm(`Excluir permanentemente ${p.name}?`)) {
-                                                setProjects(prev => prev.filter(x => x.id !== p.id));
-                                            }
+                                            setConfirmModal({
+                                                isOpen: true,
+                                                title: "Excluir Obra",
+                                                message: `Excluir permanentemente ${p.name}? Esta ação não pode ser desfeita.`,
+                                                onConfirm: () => {
+                                                    setProjects(prev => prev.filter(x => x.id !== p.id));
+                                                    setConfirmModal(null);
+                                                },
+                                                type: 'danger'
+                                            });
                                         }}
                                         className="text-[9px] font-bold text-red-500/50 hover:text-red-500 uppercase tracking-tighter"
                                     >
@@ -1542,6 +1733,48 @@ const LessonsLearnedView: React.FC<{
                             </div>
                         ))
                     )}
+                </div>
+            )}
+
+            {/* Confirm Modal */}
+            {confirmModal && confirmModal.isOpen && (
+                <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-nexus-800 border border-nexus-700 rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
+                        <div className={`p-6 flex justify-between items-center text-white ${
+                            confirmModal.type === 'danger' ? 'bg-red-600' : 
+                            confirmModal.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                {confirmModal.type === 'danger' ? <Trash2 size={24} /> : 
+                                 confirmModal.type === 'warning' ? <AlertTriangle size={24} /> : <Info size={24} />}
+                                <h3 className="font-black text-lg uppercase italic">{confirmModal.title}</h3>
+                            </div>
+                            <button onClick={() => setConfirmModal(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={20}/></button>
+                        </div>
+                        <div className="p-8">
+                            <p className="text-white font-medium text-center">{confirmModal.message}</p>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
+                            {confirmModal.type !== 'warning' && (
+                                <button 
+                                    onClick={() => setConfirmModal(null)} 
+                                    className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                            )}
+                            <button 
+                                onClick={confirmModal.onConfirm}
+                                className={`flex-1 text-white py-3 rounded-xl font-bold transition-all shadow-lg text-sm ${
+                                    confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 
+                                    confirmModal.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-500 shadow-yellow-900/20' : 
+                                    'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
+                                }`}
+                            >
+                                {confirmModal.type === 'warning' ? 'Entendi' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -1557,10 +1790,18 @@ export const TeleinfoReport: React.FC = () => {
     // AI Report State moved to parent
     const [aiReport, setAiReport] = useState<{ content: string; projectName: string } | null>(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
     const [hasApiKey, setHasApiKey] = useState<boolean>(false);
     const [showDbHelp, setShowDbHelp] = useState(false);
     const [showManualKeyModal, setShowManualKeyModal] = useState(false);
     const [manualKeyInput, setManualKeyInput] = useState('');
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'info' | 'danger' | 'warning';
+    } | null>(null);
 
     useEffect(() => {
         const checkKey = async () => {
@@ -1581,13 +1822,25 @@ export const TeleinfoReport: React.FC = () => {
 
     const handleSaveManualKey = () => {
         if (!manualKeyInput.trim()) {
-            alert("Por favor, insira uma chave válida.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Atenção",
+                message: "Por favor, insira uma chave válida.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'warning'
+            });
             return;
         }
         localStorage.setItem('NEXUS_GEMINI_API_KEY', manualKeyInput.trim());
         setHasApiKey(true);
         setShowManualKeyModal(false);
-        alert("Chave de API salva com sucesso no seu navegador!");
+        setConfirmModal({
+            isOpen: true,
+            title: "Sucesso",
+            message: "Chave de API salva com sucesso no seu navegador!",
+            onConfirm: () => setConfirmModal(null),
+            type: 'info'
+        });
     };
 
     const handleOpenKeySelector = async () => {
@@ -1612,12 +1865,17 @@ export const TeleinfoReport: React.FC = () => {
         if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
             const selected = await window.aistudio.hasSelectedApiKey();
             if (!selected) {
-                const confirm = window.confirm("Para usar a IA, você precisa selecionar uma chave de API. Abrir seletor agora?");
-                if (confirm) {
-                    await handleOpenKeySelector();
-                } else {
-                    return;
-                }
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Chave de API Necessária",
+                    message: "Para usar a IA, você precisa selecionar uma chave de API. Abrir seletor agora?",
+                    onConfirm: async () => {
+                        setConfirmModal(null);
+                        await handleOpenKeySelector();
+                    },
+                    type: 'info'
+                });
+                return;
             }
         }
 
@@ -1626,20 +1884,32 @@ export const TeleinfoReport: React.FC = () => {
             const report = await generateSeniorPlanningAuditReport(project);
             
             if (report.startsWith("Erro: API Key não configurada")) {
-                alert("Chave de API não configurada.\n\nPor favor, siga estes passos:\n1. Clique no ícone de engrenagem (Settings) no canto superior direito.\n2. Vá em 'Secrets'.\n3. Adicione um segredo chamado GEMINI_API_KEY.\n4. Cole o valor da sua chave e salve.");
-                
-                if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-                    const confirmSelection = window.confirm("Deseja abrir o seletor de chaves da plataforma agora?");
-                    if (confirmSelection) {
-                        await window.aistudio.openSelectKey();
-                    }
-                }
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Configuração Necessária",
+                    message: "Chave de API não configurada. Deseja abrir o seletor de chaves agora?",
+                    onConfirm: async () => {
+                        setConfirmModal(null);
+                        if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+                            await window.aistudio.openSelectKey();
+                        } else {
+                            setShowManualKeyModal(true);
+                        }
+                    },
+                    type: 'warning'
+                });
                 setIsGeneratingReport(false);
                 return;
             }
             
             if (report.startsWith("Erro ao gerar relatório")) {
-                alert(report);
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Erro na Geração",
+                    message: report,
+                    onConfirm: () => setConfirmModal(null),
+                    type: 'danger'
+                });
                 setIsGeneratingReport(false);
                 return;
             }
@@ -1647,7 +1917,13 @@ export const TeleinfoReport: React.FC = () => {
             setAiReport({ content: report, projectName: project.name });
         } catch (error) {
             console.error("Erro na geração do relatório:", error);
-            alert("Ocorreu um erro inesperado ao gerar o relatório. Verifique o console para detalhes técnicos.");
+            setConfirmModal({
+                isOpen: true,
+                title: "Erro Inesperado",
+                message: "Ocorreu um erro inesperado ao gerar o relatório. Verifique o console para detalhes técnicos.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'danger'
+            });
         } finally {
             setIsGeneratingReport(false);
         }
@@ -1664,6 +1940,37 @@ export const TeleinfoReport: React.FC = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    const handleExportPDF = async (content: string, projectName: string, elementId: string) => {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        try {
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+            
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Relatorio_Nexus_${projectName.replace(/\s+/g, '_')}.pdf`);
+        } catch (error) {
+            console.error("Erro ao exportar PDF:", error);
+            setConfirmModal({
+                isOpen: true,
+                title: "Erro na Exportação",
+                message: "Erro ao gerar PDF. Verifique o console.",
+                onConfirm: () => setConfirmModal(null),
+                type: 'danger'
+            });
+        }
     };
 
     return (
@@ -1734,6 +2041,7 @@ export const TeleinfoReport: React.FC = () => {
                         setProjects={setDetailedProjects}
                         hasApiKey={hasApiKey}
                         onOpenKeySelector={handleOpenKeySelector}
+                        onExportPDF={handleExportPDF}
                     />
                 )}
             </div>
@@ -1854,7 +2162,20 @@ ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`}
                                     title="Exportar Relatório (.md)"
                                 >
                                     <Download size={18} />
-                                    <span className="hidden sm:inline">Exportar</span>
+                                    <span className="hidden sm:inline">MD</span>
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        setIsExportingPDF(true);
+                                        await handleExportPDF(aiReport.content, aiReport.projectName, "pdf-audit-report");
+                                        setIsExportingPDF(false);
+                                    }}
+                                    disabled={isExportingPDF}
+                                    className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold uppercase"
+                                    title="Exportar Relatório (.pdf)"
+                                >
+                                    {isExportingPDF ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />}
+                                    <span className="hidden sm:inline">PDF</span>
                                 </button>
                                 <button onClick={() => setAiReport(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={24}/></button>
                             </div>
@@ -1868,9 +2189,52 @@ ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`}
                                 prose-hr:border-nexus-700">
                                 <Markdown>{aiReport.content}</Markdown>
                             </div>
+                            <PDFReportTemplate content={aiReport.content} projectName={aiReport.projectName} id="pdf-audit-report" />
                         </div>
                         <div className="p-6 border-t border-nexus-700 flex justify-end bg-nexus-800 shrink-0">
                             <button onClick={() => setAiReport(null)} className="bg-nexus-700 hover:bg-nexus-600 text-white px-8 py-2 rounded-xl font-bold transition-all">Fechar Relatório</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Global Confirm Modal */}
+            {confirmModal && confirmModal.isOpen && (
+                <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-nexus-800 border border-nexus-700 rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
+                        <div className={`p-6 flex justify-between items-center text-white ${
+                            confirmModal.type === 'danger' ? 'bg-red-600' : 
+                            confirmModal.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                {confirmModal.type === 'danger' ? <Trash2 size={24} /> : 
+                                 confirmModal.type === 'warning' ? <AlertTriangle size={24} /> : <Info size={24} />}
+                                <h3 className="font-black text-lg uppercase italic">{confirmModal.title}</h3>
+                            </div>
+                            <button onClick={() => setConfirmModal(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={20}/></button>
+                        </div>
+                        <div className="p-8">
+                            <p className="text-white font-medium text-center">{confirmModal.message}</p>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
+                            {confirmModal.type !== 'warning' && (
+                                <button 
+                                    onClick={() => setConfirmModal(null)} 
+                                    className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                            )}
+                            <button 
+                                onClick={confirmModal.onConfirm}
+                                className={`flex-1 text-white py-3 rounded-xl font-bold transition-all shadow-lg text-sm ${
+                                    confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 
+                                    confirmModal.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-500 shadow-yellow-900/20' : 
+                                    'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
+                                }`}
+                            >
+                                {confirmModal.type === 'warning' ? 'Entendi' : 'Confirmar'}
+                            </button>
                         </div>
                     </div>
                 </div>
