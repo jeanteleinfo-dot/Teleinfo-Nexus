@@ -1544,10 +1544,42 @@ export const TeleinfoReport: React.FC = () => {
     // AI Report State moved to parent
     const [aiReport, setAiReport] = useState<{ content: string; projectName: string } | null>(null);
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+    const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+
+    useEffect(() => {
+        const checkKey = async () => {
+            if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+                const selected = await window.aistudio.hasSelectedApiKey();
+                setHasApiKey(selected);
+            }
+        };
+        checkKey();
+    }, []);
+
+    const handleOpenKeySelector = async () => {
+        if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+            await window.aistudio.openSelectKey();
+            // Assumimos sucesso conforme diretrizes da plataforma
+            setHasApiKey(true);
+        }
+    };
 
     const handleGenerateAiReport = async (project: DetailedProject) => {
         console.log("Iniciando geração de relatório para:", project.name);
         
+        // Garantir que a chave está selecionada antes de prosseguir
+        if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+            const selected = await window.aistudio.hasSelectedApiKey();
+            if (!selected) {
+                const confirm = window.confirm("Para usar a IA, você precisa selecionar uma chave de API. Abrir seletor agora?");
+                if (confirm) {
+                    await handleOpenKeySelector();
+                } else {
+                    return;
+                }
+            }
+        }
+
         setIsGeneratingReport(true);
         try {
             const report = await generateSeniorPlanningAuditReport(project);
@@ -1601,6 +1633,17 @@ export const TeleinfoReport: React.FC = () => {
                   <p className="text-nexus-400 text-sm">Visão executiva e auditoria de obras Teleinfo</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button 
+                        onClick={handleOpenKeySelector}
+                        title="Configurar Chave de API Gemini"
+                        className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center gap-2 text-xs font-black uppercase ${
+                            hasApiKey 
+                            ? 'bg-green-500/10 border-green-500/50 text-green-400 hover:bg-green-500/20' 
+                            : 'bg-purple-600 border-purple-500 text-white hover:bg-purple-500 shadow-lg shadow-purple-900/40'
+                        }`}
+                    >
+                        <BrainCircuit size={16} /> {hasApiKey ? 'IA Habilitada' : 'Configurar IA'}
+                    </button>
                     <button 
                         onClick={() => window.location.reload()}
                         title="Sincronizar com Banco de Dados"
