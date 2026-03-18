@@ -8,7 +8,8 @@ import {
   Save, FilePlus, Trash2, Plus, Download, LayoutDashboard, Target, CheckCircle2, Activity,
   Layers, Clock, ClipboardList, Calendar, Briefcase, ListTodo, Percent, Timer, TrendingUp,
   History, ChevronLeft, ChevronRight, Maximize2, MonitorPlay, ShoppingCart, UserCheck, Eye,
-  FileSearch, Loader2, Package, CheckCircle, Info, RefreshCw, Rocket
+  FileSearch, Loader2, Package, CheckCircle, Info, RefreshCw, Rocket, DollarSign,
+  FolderArchive, CheckSquare
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import Papa from 'papaparse';
@@ -24,7 +25,7 @@ declare global {
 }
 
 import { supabase, syncToSupabase, fetchFromSupabase, useSupabaseData } from '../services/supabase';
-import { generateSeniorPlanningAuditReport } from '../services/geminiService';
+import { generateSeniorPlanningAuditReport, generateLessonsLearnedReport } from '../services/geminiService';
 
 // --- CONSTANTES DE CORES ---
 const BU_COLORS: Record<string, string> = {
@@ -278,6 +279,8 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
     const [tempStepName, setTempStepName] = useState('');
     const [tempStepPerc, setTempStepPerc] = useState<number>(0);
 
+    const activeProjects = projects.filter(p => p.status !== 'archived');
+
     const handleSave = async () => {
         if (!editingProject || !editingProject.name) {
             alert("O nome do projeto é obrigatório.");
@@ -364,7 +367,17 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                         <Activity className="text-green-400" /> Auditoria Detalhada de Obras
                     </h3>
                     <button onClick={() => { 
-                        setEditingProject({ id: '', name: '', bu: '', start: '', end: '', costCenter: '', steps: [], soldHours: {infra:0,sse:0,ti:0,aut:0}, usedHours: {infra:0,sse:0,ti:0,aut:0}, observations: '' }); 
+                        setEditingProject({ 
+                            id: '', name: '', bu: '', start: '', end: '', costCenter: '', 
+                            steps: [], 
+                            soldHours: {infra:0,sse:0,ti:0,aut:0}, 
+                            usedHours: {infra:0,sse:0,ti:0,aut:0}, 
+                            observations: '',
+                            totalSoldValue: 0,
+                            totalCostValue: 0,
+                            totalUsedValue: 0,
+                            status: 'active'
+                        }); 
                         setViewMode('form'); 
                     }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-blue-900/40 active:scale-95 transition-all">
                         <Plus size={18} /> Novo Projeto
@@ -372,13 +385,13 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {projects.length === 0 ? (
+                  {activeProjects.length === 0 ? (
                     <div className="col-span-full py-20 text-center bg-nexus-800 rounded-xl border-2 border-dashed border-nexus-700 text-nexus-500">
                         <GanttChartSquare size={40} className="mx-auto mb-2 opacity-20" />
                         Nenhuma auditoria cadastrada.
                     </div>
                   ) : (
-                    projects.map(p => {
+                    activeProjects.map(p => {
                         const totalSold = (p.soldHours?.infra || 0) + (p.soldHours?.sse || 0) + (p.soldHours?.ti || 0);
                         const totalUsed = (p.usedHours?.infra || 0) + (p.usedHours?.sse || 0) + (p.usedHours?.ti || 0);
                         const hourRatioColor = getRatioColor(totalUsed, totalSold);
@@ -398,6 +411,15 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                         <div className="flex items-center gap-3 mt-1">
                                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-nexus-900 text-nexus-400 border border-nexus-700">CC: {p.costCenter}</span>
                                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border" style={{ borderColor: getBuColor(p.bu || ''), color: getBuColor(p.bu || '') }}>{p.bu || 'GERAL'}</span>
+                                            {p.totalCostValue && p.totalCostValue > 0 && (
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                                                    (p.totalUsedValue || 0) / p.totalCostValue > 1.0 ? 'border-red-500 text-red-500 bg-red-500/10' :
+                                                    (p.totalUsedValue || 0) / p.totalCostValue > 0.8 ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10' :
+                                                    'border-green-500 text-green-500 bg-green-500/10'
+                                                }`}>
+                                                    Saúde: {(p.totalUsedValue || 0) / p.totalCostValue > 1.0 ? 'Crítica' : (p.totalUsedValue || 0) / p.totalCostValue > 0.8 ? 'Atenção' : 'Saudável'}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
@@ -409,8 +431,18 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                         >
                                             {isGeneratingReport ? <Loader2 size={16} className="animate-spin" /> : <FileSearch size={16}/>}
                                         </button>
-                                        <button onClick={() => { setEditingProject(p); setViewMode('form'); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"><GanttChartSquare size={16}/></button>
-                                        <button onClick={() => { if(confirm(`Excluir auditoria de ${p.name}?`)) setProjects(projects.filter(x => x.id !== p.id)) }} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                        <button onClick={() => { setEditingProject(p); setViewMode('form'); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Editar Auditoria"><GanttChartSquare size={16}/></button>
+                                        <button 
+                                            onClick={() => { 
+                                                if(confirm(`Arquivar obra ${p.name}? Ela será movida para Lições Aprendidas.`)) {
+                                                    setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
+                                                }
+                                            }} 
+                                            className="p-2 text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors"
+                                            title="Arquivar Obra (Finalizada)"
+                                        >
+                                            <FolderArchive size={16}/>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -545,6 +577,32 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                 rows={4}
                                 className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-3 text-white focus:border-blue-500 outline-none transition-all resize-none text-sm"
                             />
+                        </div>
+
+                        <div className="pt-4 border-t border-nexus-700 space-y-4">
+                            <h4 className="text-nexus-400 font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
+                                <DollarSign size={14}/> Gestão Financeira (Valores)
+                            </h4>
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-nexus-500 font-bold uppercase">Valor Total Vendido (Receita)</label>
+                                    <input type="number" value={editingProject?.totalSoldValue || 0} 
+                                           onChange={e => setEditingProject({...editingProject!, totalSoldValue: Number(e.target.value)})} 
+                                           className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-2 text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-nexus-500 font-bold uppercase">Valor de Custo (Orçamento)</label>
+                                    <input type="number" value={editingProject?.totalCostValue || 0} 
+                                           onChange={e => setEditingProject({...editingProject!, totalCostValue: Number(e.target.value)})} 
+                                           className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-2 text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-nexus-500 font-bold uppercase">Valor Utilizado (Realizado)</label>
+                                    <input type="number" value={editingProject?.totalUsedValue || 0} 
+                                           onChange={e => setEditingProject({...editingProject!, totalUsedValue: Number(e.target.value)})} 
+                                           className="w-full bg-nexus-900 border border-nexus-700 rounded-lg p-2 text-white focus:border-blue-500 outline-none" />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1125,14 +1183,47 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             const timeProgress = calculateTimeProgress(project.start, project.end);
             const avgExec = project.steps.length > 0 ? project.steps.reduce((acc, s) => acc + s.perc, 0) / project.steps.length : 0;
 
+            // Lógica de Saúde Financeira
+            const costValue = project.totalCostValue || 0;
+            const usedValue = project.totalUsedValue || 0;
+            const financialRatio = costValue > 0 ? usedValue / costValue : 0;
+            
+            let healthStatus = 'Saudável';
+            let healthColor = 'text-green-500';
+            let healthBg = 'bg-green-500/20';
+            let healthBorder = 'border-green-500/40';
+            let HealthIcon = CheckCircle;
+
+            if (financialRatio > 1.0) {
+                healthStatus = 'Crítico';
+                healthColor = 'text-red-500';
+                healthBg = 'bg-red-500/20';
+                healthBorder = 'border-red-500/40';
+                HealthIcon = AlertTriangle;
+            } else if (financialRatio > 0.8) {
+                healthStatus = 'Exige Atenção';
+                healthColor = 'text-yellow-500';
+                healthBg = 'bg-yellow-500/20';
+                healthBorder = 'border-yellow-500/40';
+                HealthIcon = Clock;
+            }
+
             return (
                 <div className="space-y-4 animate-fadeIn h-full flex flex-col justify-center max-h-full overflow-hidden">
                     <div className="flex justify-between items-start border-b border-nexus-800 pb-4">
-                        <div>
-                            <h2 className="text-3xl font-black text-white tracking-tight uppercase">{project.name}</h2>
-                            <div className="flex gap-2 mt-1">
-                                <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">CC: {project.costCenter}</span>
-                                <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
+                        <div className="flex items-start gap-4">
+                            <div className={`mt-1 p-2 rounded-xl border ${healthBorder} ${healthBg} ${healthColor} shadow-lg`}>
+                                <HealthIcon size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-3xl font-black text-white tracking-tight uppercase">{project.name}</h2>
+                                <div className="flex gap-2 mt-1">
+                                    <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">CC: {project.costCenter}</span>
+                                    <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${healthBorder} ${healthBg} ${healthColor} uppercase tracking-widest`}>
+                                        Saúde: {healthStatus}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div className="text-right">
@@ -1291,8 +1382,161 @@ const EscapeIcon = () => (
     <div className="px-1 border border-nexus-500 rounded text-[8px] flex items-center justify-center">ESC</div>
 );
 
+const LessonsLearnedView: React.FC<{ 
+    projects: DetailedProject[]; 
+    setProjects: React.Dispatch<React.SetStateAction<DetailedProject[]>>;
+}> = ({ projects, setProjects }) => {
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+
+    const archivedProjects = projects.filter(p => p.status === 'archived');
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const handleGenerateLessonsLearned = async () => {
+        if (selectedIds.length === 0) {
+            alert("Selecione ao menos uma obra para análise.");
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            const selectedProjects = projects.filter(p => selectedIds.includes(p.id));
+            const report = await generateLessonsLearnedReport(selectedProjects);
+            setAnalysisResult(report);
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao gerar análise de lições aprendidas.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6 animate-fadeIn">
+            <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <History className="text-yellow-400" /> Lições Aprendidas (Obras Finalizadas)
+                </h3>
+                <div className="flex gap-2">
+                    {analysisResult && (
+                        <button 
+                            onClick={() => setAnalysisResult(null)}
+                            className="bg-nexus-700 hover:bg-nexus-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all"
+                        >
+                            Voltar para Lista
+                        </button>
+                    )}
+                    <button 
+                        onClick={handleGenerateLessonsLearned}
+                        disabled={isAnalyzing || selectedIds.length === 0}
+                        className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-purple-900/40 active:scale-95 transition-all"
+                    >
+                        {isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <BrainCircuit size={18} />}
+                        Gerar Lições Aprendidas IA
+                    </button>
+                </div>
+            </div>
+
+            {analysisResult ? (
+                <div className="bg-nexus-800 p-6 rounded-xl border border-nexus-700 shadow-2xl animate-slideUp">
+                    <div className="flex justify-between items-center mb-6 pb-4 border-b border-nexus-700">
+                        <h4 className="text-purple-400 font-black uppercase tracking-widest flex items-center gap-2">
+                            <Bot size={20} /> Resultado da Inteligência Artificial
+                        </h4>
+                        <button 
+                            onClick={() => {
+                                const blob = new Blob([analysisResult], { type: 'text/markdown' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `Licoes_Aprendidas_Nexus_${new Date().toISOString().split('T')[0]}.md`;
+                                a.click();
+                            }}
+                            className="text-nexus-400 hover:text-white flex items-center gap-1 text-xs font-bold"
+                        >
+                            <Download size={14} /> Exportar MD
+                        </button>
+                    </div>
+                    <div className="prose prose-invert max-w-none prose-headings:text-purple-400 prose-strong:text-white prose-p:text-nexus-300">
+                        <Markdown>{analysisResult}</Markdown>
+                    </div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {archivedProjects.length === 0 ? (
+                        <div className="col-span-full py-20 text-center bg-nexus-800 rounded-xl border-2 border-dashed border-nexus-700 text-nexus-500">
+                            <FolderArchive size={40} className="mx-auto mb-2 opacity-20" />
+                            Nenhuma obra arquivada para análise.
+                        </div>
+                    ) : (
+                        archivedProjects.map(p => (
+                            <div 
+                                key={p.id} 
+                                onClick={() => toggleSelect(p.id)}
+                                className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden group ${
+                                    selectedIds.includes(p.id) 
+                                    ? 'bg-purple-900/20 border-purple-500 shadow-lg shadow-purple-900/20' 
+                                    : 'bg-nexus-800 border-nexus-700 hover:border-nexus-600'
+                                }`}
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <h4 className="text-white font-bold truncate pr-6">{p.name}</h4>
+                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                        selectedIds.includes(p.id) ? 'bg-purple-500 border-purple-500' : 'border-nexus-600'
+                                    }`}>
+                                        {selectedIds.includes(p.id) && <CheckSquare size={14} className="text-white" />}
+                                    </div>
+                                </div>
+                                <div className="space-y-1 text-[10px] text-nexus-400">
+                                    <div className="flex justify-between">
+                                        <span>CC: {p.costCenter}</span>
+                                        <span>BU: {p.bu}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span>Período: {p.start} - {p.end}</span>
+                                    </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-nexus-700/50 flex justify-between items-center">
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if(confirm(`Restaurar obra ${p.name} para Auditoria Ativa?`)) {
+                                                setProjects(prev => prev.map(x => x.id === p.id ? { ...x, status: 'active' } : x));
+                                            }
+                                        }}
+                                        className="text-[9px] font-bold text-blue-400 hover:text-blue-300 uppercase tracking-tighter"
+                                    >
+                                        Restaurar
+                                    </button>
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if(confirm(`Excluir permanentemente ${p.name}?`)) {
+                                                setProjects(prev => prev.filter(x => x.id !== p.id));
+                                            }
+                                        }}
+                                        className="text-[9px] font-bold text-red-500/50 hover:text-red-500 uppercase tracking-tighter"
+                                    >
+                                        Excluir
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const TeleinfoReport: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation' | 'lessons_learned'>('dashboard');
     const [generalProjects] = useSupabaseData<any[]>('general_projects', []);
     const [detailedProjects, setDetailedProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
     const [buyingStatus] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
@@ -1365,10 +1609,10 @@ export const TeleinfoReport: React.FC = () => {
                         <RefreshCw size={16} /> Sincronizar
                     </button>
                     <div className="flex bg-nexus-800 p-1.5 rounded-xl border border-nexus-700 shadow-xl">
-                        {['dashboard', 'monitoring', 'presentation'].map(tab => (
+                        {['dashboard', 'monitoring', 'presentation', 'lessons_learned'].map(tab => (
                             <button key={tab} onClick={() => setActiveTab(tab as any)}
                                 className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-nexus-500 hover:text-white'}`}>
-                                {tab === 'dashboard' ? 'Geral' : tab === 'monitoring' ? 'Auditoria' : 'Slides'}
+                                {tab === 'dashboard' ? 'Geral' : tab === 'monitoring' ? 'Auditoria' : tab === 'presentation' ? 'Slides' : 'Lições'}
                             </button>
                         ))}
                     </div>
@@ -1391,6 +1635,12 @@ export const TeleinfoReport: React.FC = () => {
                         buyingStatus={buyingStatus}
                         onGenerateAiReport={handleGenerateAiReport}
                         isGeneratingReport={isGeneratingReport}
+                    />
+                )}
+                {activeTab === 'lessons_learned' && (
+                    <LessonsLearnedView 
+                        projects={detailedProjects}
+                        setProjects={setDetailedProjects}
                     />
                 )}
             </div>

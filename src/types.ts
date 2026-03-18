@@ -93,6 +93,10 @@ export interface DetailedProject {
     usedHours: BuHours;
     productionData?: ProductionData[];
     observations?: string;
+    totalSoldValue?: number;
+    totalCostValue?: number;
+    totalUsedValue?: number;
+    status?: 'active' | 'archived';
 }
 
 export interface KeyFact {

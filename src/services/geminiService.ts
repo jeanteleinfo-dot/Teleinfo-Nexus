@@ -199,3 +199,73 @@ Seja analítico, direto e profissional. Use negrito para destacar números, aler
     return "Erro ao gerar relatório de auditoria sênior. Verifique se a API Key está correta.";
   }
 };
+
+export const generateLessonsLearnedReport = async (projects: DetailedProject[]): Promise<string> => {
+  const ai = getAI();
+  if (!ai) return "Erro: API Key não configurada.";
+
+  const projectsData = projects.map(p => {
+    const soldTotal = (p.soldHours?.infra || 0) + (p.soldHours?.sse || 0) + (p.soldHours?.ti || 0) + (p.soldHours?.aut || 0);
+    const usedTotal = (p.usedHours?.infra || 0) + (p.usedHours?.sse || 0) + (p.usedHours?.ti || 0) + (p.usedHours?.aut || 0);
+    const avgExec = p.steps && p.steps.length > 0 ? p.steps.reduce((acc, s) => acc + s.perc, 0) / p.steps.length : 0;
+    
+    return `
+    Projeto: ${p.name}
+    CC: ${p.costCenter}
+    Período: ${p.start} a ${p.end}
+    Execução Média: ${avgExec.toFixed(2)}%
+    H/H Vendidas: ${soldTotal}h
+    H/H Utilizadas: ${usedTotal}h
+    Valor Vendido: ${p.totalSoldValue || 0}
+    Valor Custo: ${p.totalCostValue || 0}
+    Valor Utilizado: ${p.totalUsedValue || 0}
+    Observações: ${p.observations || 'N/A'}
+    `;
+  }).join('\n---\n');
+
+  const prompt = `Você é um Consultor de Gestão de Projetos e Especialista em Melhoria Contínua (Lean Six Sigma).
+  Sua tarefa é analisar um conjunto de projetos FINALIZADOS da Teleinfo e gerar um Relatório de Lições Aprendidas Consolidado.
+  
+  Objetivo da Análise:
+  1. Avaliar a precisão das estimativas iniciais (Tempo, Horas e Valores).
+  2. Identificar padrões de desvios (onde estamos errando mais?).
+  3. Propor melhorias no processo de orçamentação e planejamento.
+  4. Gerar insights para futuros projetos similares.
+
+  Dados dos Projetos Selecionados:
+  ${projectsData}
+
+  Estrutura do Relatório (Markdown):
+  # Relatório Consolidado de Lições Aprendidas - Nexus Intelligence
+  
+  ## 1. Resumo do Portfólio Analisado
+  Breve visão geral dos projetos selecionados e seu desempenho médio.
+
+  ## 2. Análise de Estimativas vs. Realidade
+  - **Tempo/Cronograma:** Fomos precisos nas datas?
+  - **Recursos (H/H):** Onde houve maior estouro de horas?
+  - **Financeiro:** A margem planejada foi mantida?
+
+  ## 3. Padrões Identificados e Causas Raiz
+  Identifique o que se repete entre os projetos (ex: subdimensionamento em TI, atrasos em Infra, etc).
+
+  ## 4. Lições Aprendidas e Recomendações de Ouro
+  O que devemos fazer diferente no PRÓXIMO orçamento? Como evitar os erros do passado?
+
+  ## 5. Conclusão Estratégica
+  Um parecer final para a diretoria sobre a maturidade da gestão desses projetos.
+
+  Responda em Português do Brasil, de forma técnica, executiva e propositiva.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { temperature: 0.4 }
+    });
+    return response.text || "Relatório de lições aprendidas indisponível.";
+  } catch (error) {
+    console.error(error);
+    return "Erro ao gerar relatório de lições aprendidas.";
+  }
+};
