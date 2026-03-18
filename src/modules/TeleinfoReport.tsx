@@ -144,6 +144,7 @@ const GeneralDashboardView: React.FC = () => {
         message: string;
         onConfirm: () => void;
         type?: 'info' | 'danger' | 'warning';
+        isAlert?: boolean;
     } | null>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,7 +162,8 @@ const GeneralDashboardView: React.FC = () => {
                     title: "Atenção",
                     message: "Nenhum dado encontrado no arquivo CSV.",
                     onConfirm: () => setConfirmModal(null),
-                    type: 'warning'
+                    type: 'warning',
+                    isAlert: true
                 });
                 return;
             }
@@ -184,7 +186,8 @@ const GeneralDashboardView: React.FC = () => {
                     title: "Erro na Importação",
                     message: "Erro ao importar dados. Verifique o console.",
                     onConfirm: () => setConfirmModal(null),
-                    type: 'danger'
+                    type: 'danger',
+                    isAlert: true
                 });
             }
         };
@@ -361,6 +364,7 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
         message: string;
         onConfirm: () => void;
         type?: 'info' | 'danger' | 'warning';
+        isAlert?: boolean;
     } | null>(null);
     const [tempStepName, setTempStepName] = useState('');
     const [tempStepPerc, setTempStepPerc] = useState<number>(0);
@@ -374,7 +378,8 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                 title: "Atenção",
                 message: "O nome do projeto é obrigatório.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'warning'
+                type: 'warning',
+                isAlert: true
             });
             return;
         }
@@ -418,7 +423,8 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                 title: "Erro ao Salvar",
                 message: "Erro ao processar salvamento. Verifique o console para detalhes.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'danger'
+                type: 'danger',
+                isAlert: true
             });
         }
     };
@@ -510,12 +516,12 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-nexus-900 text-nexus-400 border border-nexus-700">CC: {p.costCenter}</span>
                                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded border" style={{ borderColor: getBuColor(p.bu || ''), color: getBuColor(p.bu || '') }}>{p.bu || 'GERAL'}</span>
                                             {p.totalCostValue && p.totalCostValue > 0 && (
-                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border animate-blink ${
                                                     (p.totalUsedValue || 0) / p.totalCostValue > 1.0 ? 'border-red-500 text-red-500 bg-red-500/10' :
                                                     (p.totalUsedValue || 0) / p.totalCostValue > 0.8 ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10' :
                                                     'border-green-500 text-green-500 bg-green-500/10'
                                                 }`}>
-                                                    Saúde: {(p.totalUsedValue || 0) / p.totalCostValue > 1.0 ? 'Crítica' : (p.totalUsedValue || 0) / p.totalCostValue > 0.8 ? 'Atenção' : 'Saudável'}
+                                                    Saúde Financeira: {(p.totalUsedValue || 0) / p.totalCostValue > 1.0 ? 'Crítica' : (p.totalUsedValue || 0) / p.totalCostValue > 0.8 ? 'Atenção' : 'Saudável'}
                                                 </span>
                                             )}
                                         </div>
@@ -540,7 +546,7 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                                         setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
                                                         setConfirmModal(null);
                                                     },
-                                                    type: 'warning'
+                                                    type: 'info'
                                                 });
                                             }} 
                                             className="p-2 text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors"
@@ -616,6 +622,48 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                     })
                   )}
                 </div>
+                
+                {/* Modal de Confirmação Local */}
+                {confirmModal && confirmModal.isOpen && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[7000] flex items-center justify-center p-4">
+                        <div className="bg-nexus-900 border border-nexus-700 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleIn">
+                            <div className={`p-6 border-b border-nexus-700 flex justify-between items-center text-white ${
+                                confirmModal.type === 'danger' ? 'bg-red-600' : 
+                                confirmModal.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+                            }`}>
+                                <div className="flex items-center gap-3">
+                                    {confirmModal.type === 'danger' ? <Trash2 size={24} /> : 
+                                     confirmModal.type === 'warning' ? <AlertTriangle size={24} /> : <Info size={24} />}
+                                    <h3 className="font-black text-lg uppercase italic">{confirmModal.title}</h3>
+                                </div>
+                                <button onClick={() => setConfirmModal(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={20}/></button>
+                            </div>
+                            <div className="p-8">
+                                <p className="text-white font-medium text-center">{confirmModal.message}</p>
+                            </div>
+                            <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
+                                {!confirmModal.isAlert && (
+                                    <button 
+                                        onClick={() => setConfirmModal(null)} 
+                                        className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
+                                    >
+                                        Cancelar
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={confirmModal.onConfirm}
+                                    className={`flex-1 text-white py-3 rounded-xl font-bold transition-all shadow-lg text-sm ${
+                                        confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 
+                                        confirmModal.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-500 shadow-yellow-900/20' : 
+                                        'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
+                                    }`}
+                                >
+                                    {confirmModal.isAlert ? 'Entendi' : 'Confirmar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -837,6 +885,48 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                     <Save size={20} /> Salvar Auditoria no Supabase
                 </button>
             </div>
+
+            {/* Modal de Confirmação Local no Form */}
+            {confirmModal && confirmModal.isOpen && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[7000] flex items-center justify-center p-4">
+                    <div className="bg-nexus-900 border border-nexus-700 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleIn">
+                        <div className={`p-6 border-b border-nexus-700 flex justify-between items-center text-white ${
+                            confirmModal.type === 'danger' ? 'bg-red-600' : 
+                            confirmModal.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                {confirmModal.type === 'danger' ? <Trash2 size={24} /> : 
+                                 confirmModal.type === 'warning' ? <AlertTriangle size={24} /> : <Info size={24} />}
+                                <h3 className="font-black text-lg uppercase italic">{confirmModal.title}</h3>
+                            </div>
+                            <button onClick={() => setConfirmModal(null)} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X size={20}/></button>
+                        </div>
+                        <div className="p-8">
+                            <p className="text-white font-medium text-center">{confirmModal.message}</p>
+                        </div>
+                        <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
+                            {!confirmModal.isAlert && (
+                                <button 
+                                    onClick={() => setConfirmModal(null)} 
+                                    className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                            )}
+                            <button 
+                                onClick={confirmModal.onConfirm}
+                                className={`flex-1 text-white py-3 rounded-xl font-bold transition-all shadow-lg text-sm ${
+                                    confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 
+                                    confirmModal.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-500 shadow-yellow-900/20' : 
+                                    'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
+                                }`}
+                            >
+                                {confirmModal.isAlert ? 'Entendi' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1325,8 +1415,8 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                                 <div className="flex gap-2 mt-1">
                                     <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">CC: {project.costCenter}</span>
                                     <span className="bg-nexus-800 text-nexus-400 px-2 py-0.5 rounded text-[10px] font-black border border-nexus-700">BU: {project.bu || 'GERAL'}</span>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${healthBorder} ${healthBg} ${healthColor} uppercase tracking-widest`}>
-                                        Saúde: {healthStatus}
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${healthBorder} ${healthBg} ${healthColor} uppercase tracking-widest animate-blink`}>
+                                        Saúde Financeira: {healthStatus}
                                     </span>
                                 </div>
                             </div>
@@ -1536,6 +1626,7 @@ const LessonsLearnedView: React.FC<{
         message: string;
         onConfirm: () => void;
         type?: 'info' | 'danger' | 'warning';
+        isAlert?: boolean;
     } | null>(null);
 
     const archivedProjects = projects.filter(p => p.status === 'archived');
@@ -1553,7 +1644,8 @@ const LessonsLearnedView: React.FC<{
                 title: "Atenção",
                 message: "Selecione ao menos uma obra para análise.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'warning'
+                type: 'warning',
+                isAlert: true
             });
             return;
         }
@@ -1585,7 +1677,8 @@ const LessonsLearnedView: React.FC<{
                 title: "Erro na Análise",
                 message: "Erro ao gerar análise de lições aprendidas. Verifique o console.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'danger'
+                type: 'danger',
+                isAlert: true
             });
         } finally {
             setIsAnalyzing(false);
@@ -1755,7 +1848,7 @@ const LessonsLearnedView: React.FC<{
                             <p className="text-white font-medium text-center">{confirmModal.message}</p>
                         </div>
                         <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
-                            {confirmModal.type !== 'warning' && (
+                            {!confirmModal.isAlert && (
                                 <button 
                                     onClick={() => setConfirmModal(null)} 
                                     className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
@@ -1771,7 +1864,7 @@ const LessonsLearnedView: React.FC<{
                                     'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
                                 }`}
                             >
-                                {confirmModal.type === 'warning' ? 'Entendi' : 'Confirmar'}
+                                {confirmModal.isAlert ? 'Entendi' : 'Confirmar'}
                             </button>
                         </div>
                     </div>
@@ -1801,6 +1894,7 @@ export const TeleinfoReport: React.FC = () => {
         message: string;
         onConfirm: () => void;
         type?: 'info' | 'danger' | 'warning';
+        isAlert?: boolean;
     } | null>(null);
 
     useEffect(() => {
@@ -1827,7 +1921,8 @@ export const TeleinfoReport: React.FC = () => {
                 title: "Atenção",
                 message: "Por favor, insira uma chave válida.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'warning'
+                type: 'warning',
+                isAlert: true
             });
             return;
         }
@@ -1839,7 +1934,8 @@ export const TeleinfoReport: React.FC = () => {
             title: "Sucesso",
             message: "Chave de API salva com sucesso no seu navegador!",
             onConfirm: () => setConfirmModal(null),
-            type: 'info'
+            type: 'info',
+            isAlert: true
         });
     };
 
@@ -1896,7 +1992,8 @@ export const TeleinfoReport: React.FC = () => {
                             setShowManualKeyModal(true);
                         }
                     },
-                    type: 'warning'
+                    type: 'warning',
+                    isAlert: false
                 });
                 setIsGeneratingReport(false);
                 return;
@@ -1908,7 +2005,8 @@ export const TeleinfoReport: React.FC = () => {
                     title: "Erro na Geração",
                     message: report,
                     onConfirm: () => setConfirmModal(null),
-                    type: 'danger'
+                    type: 'danger',
+                    isAlert: true
                 });
                 setIsGeneratingReport(false);
                 return;
@@ -1922,7 +2020,8 @@ export const TeleinfoReport: React.FC = () => {
                 title: "Erro Inesperado",
                 message: "Ocorreu um erro inesperado ao gerar o relatório. Verifique o console para detalhes técnicos.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'danger'
+                type: 'danger',
+                isAlert: true
             });
         } finally {
             setIsGeneratingReport(false);
@@ -1968,7 +2067,8 @@ export const TeleinfoReport: React.FC = () => {
                 title: "Erro na Exportação",
                 message: "Erro ao gerar PDF. Verifique o console.",
                 onConfirm: () => setConfirmModal(null),
-                type: 'danger'
+                type: 'danger',
+                isAlert: true
             });
         }
     };
@@ -2217,7 +2317,7 @@ ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`}
                             <p className="text-white font-medium text-center">{confirmModal.message}</p>
                         </div>
                         <div className="p-6 border-t border-nexus-700 flex gap-3 bg-nexus-800">
-                            {confirmModal.type !== 'warning' && (
+                            {!confirmModal.isAlert && (
                                 <button 
                                     onClick={() => setConfirmModal(null)} 
                                     className="flex-1 bg-nexus-700 hover:bg-nexus-600 text-white py-3 rounded-xl font-bold transition-all text-sm"
@@ -2233,7 +2333,7 @@ ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';`}
                                     'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
                                 }`}
                             >
-                                {confirmModal.type === 'warning' ? 'Entendi' : 'Confirmar'}
+                                {confirmModal.isAlert ? 'Entendi' : 'Confirmar'}
                             </button>
                         </div>
                     </div>

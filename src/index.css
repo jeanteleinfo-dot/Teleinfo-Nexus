@@ -23,6 +23,14 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-nexus-600;
   }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .animate-blink {
+    animation: blink 1.5s infinite;
+  }
 }
 
 @media print {
