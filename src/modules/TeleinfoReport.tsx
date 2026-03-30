@@ -15,7 +15,7 @@ import Markdown from 'react-markdown';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus } from '../types';
+import { DetailedProject, DetailedProjectStep, BuHours, ProjectBuyingStatus, CommandPanelPending } from '../types';
 
 declare global {
   interface Window {
@@ -96,11 +96,45 @@ const parseGeneralCsv = (text: string): any[] => {
     });
 };
 
+const parseCommandPanelCsv = (text: string): CommandPanelPending[] => {
+    const results = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: ";",
+        transformHeader: (header) => header.trim().replace(/^\ufeff/i, "").toUpperCase(),
+    });
+
+    return results.data
+        .filter((item: any) => item.CLIENTE && item.PROJETO) // Filter empty rows
+        .map((item: any, idx) => {
+            return {
+                id: `cmd-${idx}-${Date.now()}`,
+                prioridade: parseInt(item.PRIORIDADE) || 0,
+                criticidade: item.CRITICIDADE || "",
+                cliente: item.CLIENTE || "",
+                projeto: item.PROJETO || "",
+                centroCusto: item['CENTRO DE CUSTO'] || "",
+                quantidade: parseInt(item['QUANT.']) || parseInt(item.QUANT) || 0,
+                entrega: item.ENTREGA || "",
+                status: item.STATUS || "",
+                responsavel: item.RESPONSAVEL || item['RESPONSÁVEL'] || "",
+                observacoes: item.OBSERVACOES || item['OBSERVAÇÕES'] || ""
+            };
+        });
+};
+
 // --- COMPONENTS ---
 
-const GeneralDashboardView: React.FC = () => {
-    const [projects, setProjects] = useSupabaseData<any[]>('general_projects', []);
+interface GeneralDashboardProps {
+    projects: any[];
+    setProjects: (projects: any[]) => void;
+    commandPanelPendings: CommandPanelPending[];
+    setCommandPanelPendings: (pendings: CommandPanelPending[]) => void;
+}
+
+const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setProjects, commandPanelPendings, setCommandPanelPendings }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const commandPanelInputRef = useRef<HTMLInputElement>(null);
 
     const stats = useMemo(() => {
         if (!projects.length) return { statusCounts: {}, avgCompletion: 0, total: 0, naoIniciados: 0, emAndamento: 0 };
@@ -195,6 +229,54 @@ const GeneralDashboardView: React.FC = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const handleCommandPanelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            const text = evt.target?.result as string;
+            const parsed = parseCommandPanelCsv(text);
+            
+            if (parsed.length === 0) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Atenção",
+                    message: "Nenhum dado encontrado no arquivo CSV de Quadros.",
+                    onConfirm: () => setConfirmModal(null),
+                    type: 'warning',
+                    isAlert: true
+                });
+                return;
+            }
+
+            try {
+                const { error: deleteError } = await supabase.from('command_panel_pendings').delete().neq('id', '0');
+                if (deleteError) console.error("Erro ao limpar dados antigos:", deleteError);
+                
+                setCommandPanelPendings(parsed);
+                // Simple feedback
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-10 right-10 bg-purple-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
+                toast.innerText = `✓ ${parsed.length} pendências de quadros importadas!`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            } catch (err) {
+                console.error("Erro na importação de quadros:", err);
+                setConfirmModal({
+                    isOpen: true,
+                    title: "Erro na Importação",
+                    message: "Erro ao importar quadros. Verifique o console.",
+                    onConfirm: () => setConfirmModal(null),
+                    type: 'danger',
+                    isAlert: true
+                });
+            }
+        };
+        reader.readAsText(file);
+        if (commandPanelInputRef.current) commandPanelInputRef.current.value = '';
+    };
+
     return (
         <div className="space-y-6 animate-fadeIn">
             <div className="flex justify-between items-center">
@@ -203,19 +285,28 @@ const GeneralDashboardView: React.FC = () => {
                 </h3>
                 <div className="flex gap-2">
                     <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                    <input type="file" accept=".csv" ref={commandPanelInputRef} className="hidden" onChange={handleCommandPanelUpload} />
+                    
                     <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg shadow-blue-900/40">
                         <UploadCloud size={18} /> Importar Geral CSV
                     </button>
-                    {projects.length > 0 && (
+
+                    <button onClick={() => commandPanelInputRef.current?.click()} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg shadow-purple-900/40">
+                        <ShoppingCart size={18} /> Importar Quadros CSV
+                    </button>
+
+                    {(projects.length > 0 || commandPanelPendings.length > 0) && (
                         <button 
                             onClick={() => {
                                 setConfirmModal({
                                     isOpen: true,
-                                    title: "Apagar Projetos",
-                                    message: "Deseja apagar todos os projetos gerais? Esta ação não pode ser desfeita.",
+                                    title: "Apagar Dados",
+                                    message: "Deseja apagar todos os dados da aba geral? Esta ação não pode ser desfeita.",
                                     onConfirm: async () => {
                                         await supabase.from('general_projects').delete().neq('id', '0');
+                                        await supabase.from('command_panel_pendings').delete().neq('id', '0');
                                         setProjects([]);
+                                        setCommandPanelPendings([]);
                                         setConfirmModal(null);
                                     },
                                     type: 'danger'
@@ -1018,36 +1109,15 @@ interface PresentationProps {
     generalProjects: any[];
     detailedProjects: DetailedProject[];
     buyingStatus: ProjectBuyingStatus[];
+    commandPanelPendings: CommandPanelPending[];
     onGenerateAiReport: (project: DetailedProject) => void;
     isGeneratingReport: boolean;
 }
 
-const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detailedProjects, buyingStatus, onGenerateAiReport, isGeneratingReport }) => {
+const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detailedProjects, buyingStatus, commandPanelPendings, onGenerateAiReport, isGeneratingReport }) => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [currentSlide, setCurrentSlide] = useState(0);
     const [selectedBuyingDetail, setSelectedBuyingDetail] = useState<ProjectBuyingStatus | null>(null);
-
-    // Slides dinâmicos: Capa(1) + Portfólio(1) + BU(1) + Compras(1) + Obras(N) + Final(1)
-    const projectSlidesCount = detailedProjects.length;
-    const slidesCount = 5 + projectSlidesCount;
-
-    const nextSlide = useCallback(() => setCurrentSlide(prev => (prev + 1) % slidesCount), [slidesCount]);
-    const prevSlide = useCallback(() => setCurrentSlide(prev => (prev - 1 + slidesCount) % slidesCount), [slidesCount]);
-    const exitPresentation = useCallback(() => { setIsFullScreen(false); setSelectedBuyingDetail(null); }, []);
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!isFullScreen) return;
-            if (e.key === 'ArrowRight') nextSlide();
-            if (e.key === 'ArrowLeft') prevSlide();
-            if (e.key === 'Escape') {
-                if (selectedBuyingDetail) setSelectedBuyingDetail(null);
-                else exitPresentation();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isFullScreen, nextSlide, prevSlide, exitPresentation, selectedBuyingDetail]);
 
     const stats = useMemo(() => {
         const total = generalProjects.length;
@@ -1104,6 +1174,37 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         };
     }, [generalProjects, buyingStatus]);
 
+    // Lógica de Slides Dinâmicos para Kickoff e Quadros
+    const kickoffPerSlide = 10;
+    const commandPerSlide = 10;
+    
+    const kickoffSlidesCount = Math.max(1, Math.ceil(stats.kickoffProjects.length / kickoffPerSlide));
+    const commandSlidesCount = Math.max(1, Math.ceil(commandPanelPendings.length / commandPerSlide));
+    
+    const totalPortfolioSlides = kickoffSlidesCount + commandSlidesCount;
+
+    // Slides dinâmicos: Capa(1) + Portfólio(N) + BU(1) + Compras(1) + Obras(N) + Final(1)
+    const projectSlidesCount = detailedProjects.length;
+    const slidesCount = 4 + totalPortfolioSlides + projectSlidesCount;
+
+    const nextSlide = useCallback(() => setCurrentSlide(prev => (prev + 1) % slidesCount), [slidesCount]);
+    const prevSlide = useCallback(() => setCurrentSlide(prev => (prev - 1 + slidesCount) % slidesCount), [slidesCount]);
+    const exitPresentation = useCallback(() => { setIsFullScreen(false); setSelectedBuyingDetail(null); }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isFullScreen) return;
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+            if (e.key === 'Escape') {
+                if (selectedBuyingDetail) setSelectedBuyingDetail(null);
+                else exitPresentation();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isFullScreen, nextSlide, prevSlide, exitPresentation, selectedBuyingDetail]);
+
     const renderSlide = () => {
         if (currentSlide === 0) {
             return (
@@ -1120,108 +1221,72 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             );
         }
 
-        if (currentSlide === 1) {
+        // SLIDES DE KICKOFF (PORTFÓLIO COMPLETO)
+        if (currentSlide >= 1 && currentSlide <= kickoffSlidesCount) {
+            const portfolioIndex = currentSlide - 1;
+            const kickoffPage = stats.kickoffProjects.slice(portfolioIndex * kickoffPerSlide, (portfolioIndex + 1) * kickoffPerSlide);
+
             return (
-                <div className="space-y-6 animate-fadeIn h-full flex flex-col justify-start py-2 overflow-hidden">
-                    <h2 className="text-2xl font-black text-white border-l-6 border-blue-600 pl-4 uppercase tracking-tight mb-2">Portfólio Completo</h2>
-                    
-                    <div className="grid grid-cols-6 gap-3 shrink-0">
-                        {/* Total de Projetos */}
-                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
-                            <div>
-                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Total de Projetos</p>
-                                <h3 className="text-4xl font-black text-white mt-1">{stats.total}</h3>
+                <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-start py-6 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-3xl font-black text-white border-l-8 border-blue-600 pl-6 uppercase tracking-tight">Portfólio Completo {kickoffSlidesCount > 1 ? `(${currentSlide}/${kickoffSlidesCount})` : ''}</h2>
+                        <div className="bg-nexus-800/40 px-6 py-3 rounded-2xl border border-nexus-700/50 flex items-center gap-6">
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-nexus-400 uppercase tracking-widest">Total Projetos</p>
+                                <p className="text-2xl font-black text-white leading-none">{stats.total}</p>
                             </div>
-                            <Layers className="absolute right-4 bottom-4 text-nexus-700 group-hover:text-nexus-500 transition-colors" size={24} />
-                        </div>
-
-                        {/* Finalização Global */}
-                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em]">Finalização Global</p>
-                                    <Target className="text-blue-500" size={14} />
-                                </div>
-                                <h3 className="text-2xl font-black text-white mt-1">{stats.avg}%</h3>
+                            <div className="w-px h-10 bg-nexus-700" />
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Auditados</p>
+                                <p className="text-2xl font-black text-white leading-none">{stats.finalizados}</p>
                             </div>
-                            <div className="w-full bg-nexus-900 h-1.5 rounded-full mt-2 overflow-hidden">
-                                <div 
-                                    className="h-full bg-blue-500 rounded-full transition-all duration-1000" 
-                                    style={{ width: `${stats.avg}%` }}
-                                />
+                            <div className="w-px h-10 bg-nexus-700" />
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Em Andamento</p>
+                                <p className="text-2xl font-black text-white leading-none">{stats.emAndamento}</p>
                             </div>
-                        </div>
-
-                        {/* Não Iniciados */}
-                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
-                            <div>
-                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Não Iniciados</p>
-                                <h3 className="text-4xl font-black text-red-500 mt-1">{stats.notStarted}</h3>
+                            <div className="w-px h-10 bg-nexus-700" />
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Kickoff</p>
+                                <p className="text-2xl font-black text-white leading-none">{stats.kickoff}</p>
                             </div>
-                            <Clock className="absolute right-4 bottom-4 text-red-900/40 group-hover:text-red-500/40 transition-colors" size={24} />
-                        </div>
-
-                        {/* Kickoff */}
-                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
-                            <div>
-                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Kickoff</p>
-                                <h3 className="text-4xl font-black text-purple-500 mt-1">{stats.kickoff}</h3>
+                            <div className="w-px h-10 bg-nexus-700" />
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-nexus-500 uppercase tracking-widest">Não Iniciados</p>
+                                <p className="text-2xl font-black text-white leading-none">{stats.notStarted}</p>
                             </div>
-                            <Rocket className="absolute right-4 bottom-4 text-purple-900/40 group-hover:text-purple-500/40 transition-colors" size={24} />
-                        </div>
-
-                        {/* Em Andamento */}
-                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
-                            <div>
-                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Em Andamento</p>
-                                <h3 className="text-4xl font-black text-blue-400 mt-1">{stats.emAndamento}</h3>
+                            <div className="w-px h-10 bg-nexus-700" />
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-nexus-400 uppercase tracking-widest">Média Global</p>
+                                <p className="text-2xl font-black text-blue-400 leading-none">{stats.avg}%</p>
                             </div>
-                            <Activity className="absolute right-4 bottom-4 text-blue-900/40 group-hover:text-blue-400/40 transition-colors" size={24} />
-                        </div>
-
-                        {/* Finalizado */}
-                        <div className="bg-nexus-800/40 p-4 rounded-xl border border-nexus-700/50 shadow-xl flex flex-col justify-between h-32 relative overflow-hidden group hover:bg-nexus-800/60 transition-all">
-                            <div>
-                                <p className="text-[9px] font-black text-nexus-400 uppercase tracking-[0.2em] mb-1">Finalizado</p>
-                                <h3 className="text-4xl font-black text-green-500 mt-1">{stats.finalizados}</h3>
-                            </div>
-                            <CheckCircle2 className="absolute right-4 bottom-4 text-green-900/40 group-hover:text-green-500/40 transition-colors" size={24} />
                         </div>
                     </div>
-
-                    {/* Lista de Obras em Kickoff */}
-                    <div className="flex-1 overflow-hidden flex flex-col bg-nexus-800/20 rounded-2xl border border-nexus-700/30">
-                        <div className="p-3 border-b border-nexus-700/50 bg-nexus-800/40 flex items-center justify-between">
-                            <h4 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                <Rocket size={14} className="text-purple-500" /> Detalhamento: Obras em Kickoff
-                            </h4>
-                            <span className="text-[10px] font-bold text-nexus-400 bg-nexus-900 px-2 py-0.5 rounded-full">
-                                {stats.kickoff} Projetos
-                            </span>
-                        </div>
+                    
+                    <div className="flex-1 overflow-hidden flex flex-col bg-nexus-800/20 rounded-3xl border border-nexus-700/30">
                         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-nexus-700">
                             <table className="w-full text-left border-collapse">
                                 <thead className="sticky top-0 bg-nexus-900 z-10">
                                     <tr className="border-b border-nexus-700">
-                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">Cliente</th>
-                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">Squad Leader</th>
-                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">C. Custo</th>
-                                        <th className="p-3 text-[9px] font-black text-nexus-500 uppercase tracking-widest">Escopo</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">Cliente</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">Squad Leader</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">C. Custo</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">Escopo</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-nexus-800/50">
-                                    {stats.kickoffProjects.length > 0 ? (
-                                        stats.kickoffProjects.map((p, idx) => (
+                                    {kickoffPage.length > 0 ? (
+                                        kickoffPage.map((p, idx) => (
                                             <tr key={idx} className="hover:bg-nexus-700/20 transition-colors group">
-                                                <td className="p-3 text-xs font-bold text-white group-hover:text-blue-400 transition-colors">{p.cliente}</td>
-                                                <td className="p-3 text-xs font-medium text-nexus-300 italic">{p.squadLeader}</td>
-                                                <td className="p-3 text-xs font-mono text-nexus-400">{p.cCusto}</td>
-                                                <td className="p-3 text-xs text-nexus-400 max-w-xs truncate" title={p.escopo}>{p.escopo}</td>
+                                                <td className="p-4 text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{p.cliente}</td>
+                                                <td className="p-4 text-sm font-medium text-nexus-300 italic">{p.squadLeader}</td>
+                                                <td className="p-4 text-sm font-mono text-nexus-400">{p.cCusto}</td>
+                                                <td className="p-4 text-sm text-nexus-400 max-w-md truncate" title={p.escopo}>{p.escopo}</td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={4} className="p-10 text-center text-nexus-500 italic text-sm">Nenhum projeto em fase de Kickoff identificado.</td>
+                                            <td colSpan={4} className="p-12 text-center text-nexus-500 italic text-sm">Nenhum projeto em Kickoff nesta página.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -1232,7 +1297,75 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             );
         }
 
-        if (currentSlide === 2) {
+        // SLIDES DE PENDÊNCIAS DE QUADROS DE COMANDO
+        if (currentSlide > kickoffSlidesCount && currentSlide <= totalPortfolioSlides) {
+            const commandIndex = currentSlide - kickoffSlidesCount - 1;
+            const commandPage = commandPanelPendings.slice(commandIndex * commandPerSlide, (commandIndex + 1) * commandPerSlide);
+
+            return (
+                <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-start py-6 overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-3xl font-black text-white border-l-8 border-orange-600 pl-6 uppercase tracking-tight">Pendências de Quadros {commandSlidesCount > 1 ? `(${currentSlide - kickoffSlidesCount}/${commandSlidesCount})` : ''}</h2>
+                        <div className="bg-nexus-800/40 px-6 py-3 rounded-2xl border border-nexus-700/50 flex items-center gap-6">
+                            <div className="text-center">
+                                <p className="text-[10px] font-black text-nexus-400 uppercase tracking-widest">Total Pendências</p>
+                                <p className="text-2xl font-black text-white leading-none">{commandPanelPendings.length}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-hidden flex flex-col bg-nexus-800/20 rounded-3xl border border-nexus-700/30">
+                        <div className="p-4 border-b border-nexus-700/50 bg-nexus-800/40 flex items-center justify-between">
+                            <h4 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-3">
+                                <ShoppingCart size={18} className="text-orange-500" /> Detalhamento de Quadros de Comando
+                            </h4>
+                        </div>
+                        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-nexus-700">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-nexus-900 z-10">
+                                    <tr className="border-b border-nexus-700">
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">Prioridade</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">Cliente</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">Projeto</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest">C. Custo</th>
+                                        <th className="p-4 text-[10px] font-black text-nexus-500 uppercase tracking-widest text-right">Qtd. Entrega</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-nexus-800/50">
+                                    {commandPage.length > 0 ? (
+                                        commandPage.map((p, idx) => {
+                                            const priorityColor = p.prioridade === 3 ? 'text-red-500' : p.prioridade === 2 ? 'text-orange-500' : 'text-green-500';
+                                            const priorityBg = p.prioridade === 3 ? 'bg-red-500/10' : p.prioridade === 2 ? 'bg-orange-500/10' : 'bg-green-500/10';
+                                            
+                                            return (
+                                                <tr key={idx} className="hover:bg-nexus-700/20 transition-colors group">
+                                                    <td className="p-4">
+                                                        <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${priorityColor} ${priorityBg} border border-current/20`}>
+                                                            Prioridade {p.prioridade}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-sm font-bold text-white group-hover:text-orange-400 transition-colors">{p.cliente}</td>
+                                                    <td className="p-4 text-sm font-medium text-nexus-300">{p.projeto}</td>
+                                                    <td className="p-4 text-sm font-mono text-nexus-400">{p.centroCusto}</td>
+                                                    <td className="p-4 text-sm font-black text-white text-right">{p.quantidade}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={5} className="p-12 text-center text-nexus-500 italic text-sm">Nenhuma pendência de quadro nesta página.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // SLIDE DISTRIBUIÇÃO POR BU
+        if (currentSlide === totalPortfolioSlides + 1) {
             return (
                 <div className="space-y-12 animate-fadeIn h-full flex flex-col justify-center">
                     <h2 className="text-4xl font-black text-white border-l-8 border-purple-600 pl-6 uppercase tracking-tight">Distribuição por BU</h2>
@@ -1252,7 +1385,8 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             );
         }
 
-        if (currentSlide === 3) {
+        // SLIDE STATUS DE COMPRAS
+        if (currentSlide === totalPortfolioSlides + 2) {
             return (
                 <div className="h-full flex flex-col space-y-2 p-1 max-h-full overflow-hidden">
                     <div className="flex justify-between items-center border-b border-nexus-800 pb-2">
@@ -1369,9 +1503,9 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             );
         }
 
-        // SLIDES DE OBRAS DETALHADAS (Slides 4 até 4 + N-1)
-        if (currentSlide >= 4 && currentSlide < 4 + projectSlidesCount) {
-            const project = detailedProjects[currentSlide - 4];
+        // SLIDES DE OBRAS DETALHADAS
+        if (currentSlide >= totalPortfolioSlides + 3 && currentSlide < totalPortfolioSlides + 3 + projectSlidesCount) {
+            const project = detailedProjects[currentSlide - (totalPortfolioSlides + 3)];
             const totalSold = (project.soldHours?.infra || 0) + (project.soldHours?.sse || 0) + (project.soldHours?.ti || 0);
             const totalUsed = (project.usedHours?.infra || 0) + (project.usedHours?.sse || 0) + (project.usedHours?.ti || 0);
             const hhColor = getRatioColor(totalUsed, totalSold);
@@ -1881,9 +2015,23 @@ const LessonsLearnedView: React.FC<{
 
 export const TeleinfoReport: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation' | 'lessons_learned'>('dashboard');
-    const [generalProjects] = useSupabaseData<any[]>('general_projects', []);
-    const [detailedProjects, setDetailedProjects] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
-    const [buyingStatus] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+    const [generalProjects, setGeneralProjects, reloadGeneral] = useSupabaseData<any[]>('general_projects', []);
+    const [detailedProjects, setDetailedProjects, reloadDetailed] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
+    const [buyingStatus, setBuyingStatus, reloadBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+    const [commandPanelPendings, setCommandPanelPendings, reloadCommandPanel] = useSupabaseData<CommandPanelPending[]>('command_panel_pendings', []);
+
+    const handleSync = useCallback(() => {
+        reloadGeneral();
+        reloadDetailed();
+        reloadBuying();
+        reloadCommandPanel();
+        
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-10 right-10 bg-blue-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold animate-slideUp';
+        toast.innerText = '✓ Dados sincronizados com sucesso!';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }, [reloadGeneral, reloadDetailed, reloadBuying]);
 
     // AI Report State moved to parent
     const [aiReport, setAiReport] = useState<{ content: string; projectName: string } | null>(null);
@@ -2124,7 +2272,7 @@ export const TeleinfoReport: React.FC = () => {
                         <BrainCircuit size={16} /> {hasApiKey ? 'IA Habilitada' : 'Configurar IA'}
                     </button>
                     <button 
-                        onClick={() => window.location.reload()}
+                        onClick={handleSync}
                         title="Sincronizar com Banco de Dados"
                         className="p-2.5 bg-nexus-800 hover:bg-nexus-700 text-nexus-400 hover:text-white rounded-xl border border-nexus-700 transition-all active:scale-95 flex items-center gap-2 text-xs font-black uppercase"
                     >
@@ -2141,7 +2289,14 @@ export const TeleinfoReport: React.FC = () => {
                 </div>
             </div>
             <div className="flex-1 min-h-0">
-                {activeTab === 'dashboard' && <GeneralDashboardView />}
+                {activeTab === 'dashboard' && (
+                    <GeneralDashboardView 
+                        projects={generalProjects}
+                        setProjects={setGeneralProjects}
+                        commandPanelPendings={commandPanelPendings}
+                        setCommandPanelPendings={setCommandPanelPendings}
+                    />
+                )}
                 {activeTab === 'monitoring' && (
                     <MonitoringView 
                         projects={detailedProjects}
@@ -2155,6 +2310,7 @@ export const TeleinfoReport: React.FC = () => {
                         generalProjects={generalProjects} 
                         detailedProjects={detailedProjects} 
                         buyingStatus={buyingStatus}
+                        commandPanelPendings={commandPanelPendings}
                         onGenerateAiReport={handleGenerateAiReport}
                         isGeneratingReport={isGeneratingReport}
                     />

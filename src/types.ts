@@ -278,3 +278,17 @@ export interface DailyScale {
   updatedAt?: string;
   history?: string; // JSON string of changes
 }
+
+export interface CommandPanelPending {
+    id: string;
+    prioridade: number;
+    criticidade: string;
+    cliente: string;
+    projeto: string;
+    centroCusto: string;
+    quantidade: number;
+    entrega: string;
+    status: string;
+    responsavel: string;
+    observacoes: string;
+}
