@@ -1119,8 +1119,31 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
     const [currentSlide, setCurrentSlide] = useState(0);
     const [selectedBuyingDetail, setSelectedBuyingDetail] = useState<ProjectBuyingStatus | null>(null);
 
+    // Filtrar obras arquivadas (Lições Aprendidas) para não aparecerem na apresentação
+    const archivedNames = useMemo(() => 
+        new Set(detailedProjects.filter(p => p.status === 'archived').map(p => p.name.toUpperCase())), 
+    [detailedProjects]);
+
+    const activeGeneral = useMemo(() => generalProjects.filter(p => {
+        const isArchived = p.status?.toLowerCase() === 'archived' || archivedNames.has(p.cliente?.toUpperCase() + " - " + p.tipoProjeto?.toUpperCase());
+        // Note: generalProjects doesn't have a simple 'name' field, it has 'cliente' and 'tipoProjeto'.
+        // But the detailedProjects 'name' is usually constructed from them or similar.
+        // Let's stick to the explicit status check first, and then name matching if possible.
+        return p.status?.toLowerCase() !== 'archived';
+    }), [generalProjects]);
+
+    const activeDetailed = useMemo(() => detailedProjects.filter(p => p.status !== 'archived'), [detailedProjects]);
+    
+    const activeBuying = useMemo(() => 
+        buyingStatus.filter(b => !archivedNames.has(b.projeto.toUpperCase())), 
+    [buyingStatus, archivedNames]);
+
+    const activeCommand = useMemo(() => 
+        commandPanelPendings.filter(c => !archivedNames.has(c.projeto.toUpperCase())), 
+    [commandPanelPendings, archivedNames]);
+
     const stats = useMemo(() => {
-        const total = generalProjects.length;
+        const total = activeGeneral.length;
         let totalPerc = 0;
         let naoIniciados = 0;
         let emAndamento = 0;
@@ -1129,7 +1152,7 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         const kickoffProjects: any[] = [];
         const statusCounts: Record<string, number> = {};
 
-        generalProjects.forEach(p => {
+        activeGeneral.forEach(p => {
             const sRaw = p.status?.trim() || 'NÃO DEFINIDO';
             const sUpper = sRaw.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             statusCounts[sRaw] = (statusCounts[sRaw] || 0) + 1;
@@ -1150,12 +1173,12 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         const avg = total > 0 ? (totalPerc / total).toFixed(1) : 0;
 
         const buCounts: Record<string, number> = {};
-        generalProjects.forEach(p => { buCounts[p.bus || 'OUTROS'] = (buCounts[p.bus || 'OUTROS'] || 0) + 1; });
+        activeGeneral.forEach(p => { buCounts[p.bus || 'OUTROS'] = (buCounts[p.bus || 'OUTROS'] || 0) + 1; });
         const buData = Object.entries(buCounts).map(([name, value]) => ({ name, value }));
 
-        const criticalBuys = buyingStatus.filter(b => b.status === 'Crítico');
-        const intermediateBuys = buyingStatus.filter(b => b.status === 'Intermediário');
-        const standardBuys = buyingStatus.filter(b => b.status === 'Padrão');
+        const criticalBuys = activeBuying.filter(b => b.status === 'Crítico');
+        const intermediateBuys = activeBuying.filter(b => b.status === 'Intermediário');
+        const standardBuys = activeBuying.filter(b => b.status === 'Padrão');
 
         return { 
             total, 
@@ -1170,21 +1193,21 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
             criticalBuys,
             intermediateBuys,
             standardBuys,
-            buyingTotal: buyingStatus.length
+            buyingTotal: activeBuying.length
         };
-    }, [generalProjects, buyingStatus]);
+    }, [activeGeneral, activeBuying]);
 
     // Lógica de Slides Dinâmicos para Kickoff e Quadros
     const kickoffPerSlide = 10;
     const commandPerSlide = 10;
     
     const kickoffSlidesCount = Math.max(1, Math.ceil(stats.kickoffProjects.length / kickoffPerSlide));
-    const commandSlidesCount = Math.max(1, Math.ceil(commandPanelPendings.length / commandPerSlide));
+    const commandSlidesCount = Math.max(1, Math.ceil(activeCommand.length / commandPerSlide));
     
     const totalPortfolioSlides = kickoffSlidesCount + commandSlidesCount;
 
     // Slides dinâmicos: Capa(1) + Portfólio(N) + BU(1) + Compras(1) + Obras(N) + Final(1)
-    const projectSlidesCount = detailedProjects.length;
+    const projectSlidesCount = activeDetailed.length;
     const slidesCount = 4 + totalPortfolioSlides + projectSlidesCount;
 
     const nextSlide = useCallback(() => setCurrentSlide(prev => (prev + 1) % slidesCount), [slidesCount]);
@@ -1300,7 +1323,7 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
         // SLIDES DE PENDÊNCIAS DE QUADROS DE COMANDO
         if (currentSlide > kickoffSlidesCount && currentSlide <= totalPortfolioSlides) {
             const commandIndex = currentSlide - kickoffSlidesCount - 1;
-            const commandPage = commandPanelPendings.slice(commandIndex * commandPerSlide, (commandIndex + 1) * commandPerSlide);
+            const commandPage = activeCommand.slice(commandIndex * commandPerSlide, (commandIndex + 1) * commandPerSlide);
 
             return (
                 <div className="space-y-8 animate-fadeIn h-full flex flex-col justify-start py-6 overflow-hidden">
@@ -1454,8 +1477,8 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-nexus-700/30">
-                                    {buyingStatus.length > 0 ? (
-                                        buyingStatus.map((b, i) => {
+                                    {activeBuying.length > 0 ? (
+                                        activeBuying.map((b, i) => {
                                             const isCritico = b.status === 'Crítico';
                                             const isIntermediario = b.status === 'Intermediário';
                                             const colorClass = isCritico ? 'text-red-400' : isIntermediario ? 'text-yellow-400' : 'text-green-400';
@@ -1505,7 +1528,8 @@ const PresentationView: React.FC<PresentationProps> = ({ generalProjects, detail
 
         // SLIDES DE OBRAS DETALHADAS
         if (currentSlide >= totalPortfolioSlides + 3 && currentSlide < totalPortfolioSlides + 3 + projectSlidesCount) {
-            const project = detailedProjects[currentSlide - (totalPortfolioSlides + 3)];
+            const project = activeDetailed[currentSlide - (totalPortfolioSlides + 3)];
+            if (!project) return null;
             const totalSold = (project.soldHours?.infra || 0) + (project.soldHours?.sse || 0) + (project.soldHours?.ti || 0);
             const totalUsed = (project.usedHours?.infra || 0) + (project.usedHours?.sse || 0) + (project.usedHours?.ti || 0);
             const hhColor = getRatioColor(totalUsed, totalSold);
