@@ -7,34 +7,9 @@ import { ProjectBuyingStatus } from '../types';
 import { 
   Package, UploadCloud, AlertTriangle, CheckCircle, Clock, X, ShoppingCart, Trash2, Info, Eye, Calendar
 } from 'lucide-react';
-import { supabase, syncToSupabase, fetchFromSupabase } from '../services/supabase';
+import { supabase, syncToSupabase, fetchFromSupabase, useSupabaseData } from '../services/supabase';
 
 // --- UTILS ---
-
-function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>, () => void] {
-    const [storedValue, setStoredValue] = useState<T>(initialValue);
-
-    const loadData = async () => {
-        const data = await fetchFromSupabase<any>(tableName);
-        if (data) {
-            setStoredValue(data as unknown as T);
-        }
-    };
-
-    useEffect(() => {
-        loadData();
-    }, [tableName]);
-
-    const setValue = (value: T | ((val: T) => T)) => {
-        const valueToStore = value instanceof Function ? value(storedValue) : value;
-        setStoredValue(valueToStore);
-        if (Array.isArray(valueToStore)) {
-            syncToSupabase(tableName, valueToStore);
-        }
-    };
-
-    return [storedValue, setValue, loadData];
-}
 
 const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
     // Remove BOM se existir
@@ -105,8 +80,9 @@ const parseBuyingStatusCSV = (text: string): ProjectBuyingStatus[] => {
             }
         }
         
+        const randomSuffix = Math.random().toString(36).substring(2, 7);
         result.push({
-            id: `buy-${lineCount}-${Date.now()}`,
+            id: `buy-${lineCount}-${Date.now()}-${randomSuffix}`,
             projeto: fields[0] || 'N/A',
             numeroProjeto: fields[1] || 'N/A',
             status: status,
@@ -232,13 +208,15 @@ const ProjectBuyingStatusView: React.FC = () => {
             // Limpamos os dados antigos antes de inserir os novos para manter integridade.
             const { error: deleteError } = await supabase.from('buying_status').delete().neq('id', '0');
             
-            if (!deleteError) {
-                setBuyingData(parsed);
-                alert("Dados de estoque atualizados com sucesso!");
-            } else {
+            if (deleteError) {
                 console.error("Erro ao limpar dados antigos:", deleteError);
-                // Mesmo com erro na limpeza, tentamos salvar por cima
-                setBuyingData(parsed);
+            }
+            
+            const success = await setBuyingData(parsed);
+            if (success) {
+                alert("Dados de estoque atualizados e salvos com sucesso!");
+            } else {
+                alert("Erro ao salvar os dados no banco de dados.");
             }
         };
         reader.readAsText(file);
@@ -264,7 +242,7 @@ const ProjectBuyingStatusView: React.FC = () => {
                             onClick={async () => {
                                 if(confirm("Deseja realmente apagar todos os dados de compras?")) {
                                     await supabase.from('buying_status').delete().neq('id', '0');
-                                    setBuyingData([]);
+                                    await setBuyingData([]);
                                 }
                             }} 
                             className="p-2.5 text-nexus-400 hover:text-red-400 bg-nexus-800 hover:bg-red-500/10 rounded-xl transition-all border border-nexus-700"

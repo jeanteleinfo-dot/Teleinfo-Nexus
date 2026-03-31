@@ -12,7 +12,7 @@ import {
   Clock, TrendingUp, Timer, ChevronRight, Loader2, RefreshCw 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { fetchFromSupabase } from '../services/supabase';
+import { fetchFromSupabase, useSupabaseData } from '../services/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 // --- Dashboard Summary Components ---
@@ -144,30 +144,24 @@ const LandingDashboard: React.FC<LandingDashboardProps> = ({ onNavigate, general
 };
 
 export const Dashboard: React.FC = () => {
+  const { user } = useAuth();
   const [currentModule, setCurrentModule] = useState<AppModule>(AppModule.DASHBOARD);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { user } = useAuth();
 
-  const [generalProjects, setGeneralProjects] = useState<any[]>([]);
-  const [buyingStatus, setBuyingStatus] = useState<ProjectBuyingStatus[]>([]);
-  const [detailedAudits, setDetailedAudits] = useState<DetailedProject[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [generalProjects, , reloadGeneral] = useSupabaseData<any[]>('general_projects', []);
+  const [buyingStatus, , reloadBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+  const [detailedAudits, , reloadDetailed] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
+  const [dataLoading, setDataLoading] = useState(false);
 
   const loadData = useCallback(async () => {
-    // Carregamento resiliente: se um falhar, os outros continuam.
     setDataLoading(true);
-    
-    const [gp, bs, da] = await Promise.all([
-      fetchFromSupabase<any>('general_projects').catch(() => []),
-      fetchFromSupabase<ProjectBuyingStatus>('buying_status').catch(() => []),
-      fetchFromSupabase<DetailedProject>('detailed_projects').catch(() => [])
+    await Promise.all([
+      reloadGeneral(),
+      reloadBuying(),
+      reloadDetailed()
     ]);
-
-    setGeneralProjects(gp || []);
-    setBuyingStatus(bs || []);
-    setDetailedAudits(da || []);
     setDataLoading(false);
-  }, []);
+  }, [reloadGeneral, reloadBuying, reloadDetailed]);
 
   useEffect(() => {
     loadData();

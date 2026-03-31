@@ -135,7 +135,7 @@ export const OperationalScale: React.FC = () => {
     });
   }, [selectedDate, scales, works]);
 
-  const handleSaveMassScale = () => {
+  const handleSaveMassScale = async () => {
     if (!massScaleData.workId || massScaleData.employeeIds.length === 0 || !massScaleData.date) {
       alert("Preencha os campos obrigatórios: Obra, Colaboradores e Data.");
       return;
@@ -160,10 +160,14 @@ export const OperationalScale: React.FC = () => {
       updatedAt: new Date().toISOString(),
     }));
 
-    setScales(prev => [...prev, ...newScales]);
-    setIsMassScaling(false);
-    setMassScaleData({ workId: '', employeeIds: [], date: selectedDate, time: '', vehicleId: '', observations: '' });
-    alert(`${newScales.length} colaboradores escalados com sucesso!`);
+    const success = await setScales(prev => [...prev, ...newScales]);
+    if (success) {
+      setIsMassScaling(false);
+      setMassScaleData({ workId: '', employeeIds: [], date: selectedDate, time: '', vehicleId: '', observations: '' });
+      alert(`${newScales.length} colaboradores escalados com sucesso!`);
+    } else {
+      alert("Erro ao salvar escala em massa no banco de dados.");
+    }
   };
 
   // --- HANDLERS ---
@@ -203,7 +207,7 @@ export const OperationalScale: React.FC = () => {
       updatedAt: new Date().toISOString(),
     } as DailyScale;
 
-    setScales(prev => {
+    const success = await setScales(prev => {
       const index = prev.findIndex(s => s.id === newScale.id);
       if (index >= 0) {
         const updated = [...prev];
@@ -213,11 +217,15 @@ export const OperationalScale: React.FC = () => {
       return [...prev, newScale];
     });
 
-    setIsEditingScale(false);
-    setEditingScale(null);
+    if (success) {
+      setIsEditingScale(false);
+      setEditingScale(null);
+    } else {
+      alert("Erro ao salvar escala no banco de dados.");
+    }
   };
 
-  const handleCopyScale = (fromDate: string) => {
+  const handleCopyScale = async (fromDate: string) => {
     const scalesToCopy = scales.filter(s => s.date === fromDate);
     if (scalesToCopy.length === 0) {
       alert("Nenhuma escala encontrada para a data selecionada.");
@@ -232,8 +240,12 @@ export const OperationalScale: React.FC = () => {
       updatedAt: new Date().toISOString(),
     }));
 
-    setScales(prev => [...prev, ...newScales]);
-    alert(`${newScales.length} escalas copiadas para ${selectedDate}.`);
+    const success = await setScales(prev => [...prev, ...newScales]);
+    if (success) {
+      alert(`${newScales.length} escalas copiadas para ${selectedDate}.`);
+    } else {
+      alert("Erro ao copiar escalas para o banco de dados.");
+    }
   };
 
   const formatDateBR = (dateStr: string) => {
@@ -369,95 +381,118 @@ export const OperationalScale: React.FC = () => {
       skipEmptyLines: true,
       delimiter: ";",
       transformHeader: (header) => header.trim().replace(/^\ufeff/, "").toUpperCase(),
-      complete: (results) => {
+      complete: async (results) => {
         const importedData = results.data as any[];
         if (importedData.length === 0) {
           alert("O arquivo CSV está vazio ou é inválido.");
           return;
         }
 
-        const processedData = importedData.map(item => {
-          const mappedItem: any = {};
-          
-          if (registryTab === 'employees') {
-            // Mapping from user's specific CSV structure
-            mappedItem.name = item['NOME COMPLETO'] || item.NAME;
-            mappedItem.shortName = item['NOME CURTO'] || item.SHORTNAME || mappedItem.name;
-            mappedItem.role = item['CARGO / FUNÇÃO'] || item['CARGO / FUNÇÃO '] || item.ROLE;
-            mappedItem.team = item['EQUIPE / BU'] || item.TEAM;
-            mappedItem.active = true;
-            mappedItem.canDrive = false;
-            mappedItem.canActAlone = false;
-          } else if (registryTab === 'works') {
-            mappedItem.name = item['NOME DE OBRA'] || item.NAME;
-            mappedItem.client = item['CLIENTE'] || item.CLIENT;
-            mappedItem.costCenter = item['CENTRO DE CUSTO'] || item.COSTCENTER;
-            mappedItem.address = item['ENDEREÇO COMPLETO'] || item.ADDRESS;
-            mappedItem.standardTime = item['HORÁRIO PADRÃO'] || item.STANDARDTIME;
-            mappedItem.requiredTeamSize = parseInt(item['EQUIPE MÍNIMA'] || item['REQUIREDTEAMSIZE'] || '0') || 0;
-            mappedItem.status = 'Ativa';
-            mappedItem.unit = item['UNIDADE'] || '';
-            mappedItem.type = item['TIPO'] || '';
-            mappedItem.observations = item['OBSERVAÇÕES'] || '';
-            mappedItem.standardLocation = item['LOCAL PADRÃO'] || 'No Cliente';
-          } else if (registryTab === 'fleet') {
-            mappedItem.model = item['MARCA / MODELO'] || item.MODEL;
-            mappedItem.plate = item['PLACA'] || item.PLATE;
-            const rawStatus = item['SITUAÇÃO'] || item.STATUS || 'Disponível';
-            mappedItem.status = rawStatus.includes('Disponivel') ? 'Disponível' : rawStatus;
-          }
+        const processedData = importedData
+          .filter(item => Object.values(item).some(val => val !== null && val !== undefined && val !== '')) // Filtra linhas vazias
+          .map((item, idx) => {
+            const mappedItem: any = {};
+            
+            if (registryTab === 'employees') {
+              // Mapping from user's specific CSV structure
+              mappedItem.name = item['NOME COMPLETO'] || item.NAME || "";
+              mappedItem.shortName = item['NOME CURTO'] || item.SHORTNAME || mappedItem.name;
+              mappedItem.role = item['CARGO / FUNÇÃO'] || item.ROLE || "";
+              mappedItem.team = item['EQUIPE / BU'] || item.TEAM || "";
+              mappedItem.active = true;
+              mappedItem.canDrive = false;
+              mappedItem.canActAlone = false;
+            } else if (registryTab === 'works') {
+              mappedItem.name = item['NOME DE OBRA'] || item.NAME || "";
+              mappedItem.client = item['CLIENTE'] || item.CLIENT || "";
+              mappedItem.costCenter = item['CENTRO DE CUSTO'] || item.COSTCENTER || "";
+              mappedItem.address = item['ENDEREÇO COMPLETO'] || item.ADDRESS || "";
+              mappedItem.standardTime = item['HORÁRIO PADRÃO'] || item.STANDARDTIME || "";
+              mappedItem.requiredTeamSize = parseInt(item['EQUIPE MÍNIMA'] || item['REQUIREDTEAMSIZE'] || '0') || 0;
+              mappedItem.status = 'Ativa';
+              mappedItem.unit = item['UNIDADE'] || '';
+              mappedItem.type = item['TIPO'] || '';
+              mappedItem.observations = item['OBSERVAÇÕES'] || '';
+              mappedItem.standardLocation = item['LOCAL PADRÃO'] || 'No Cliente';
+            } else if (registryTab === 'fleet') {
+              mappedItem.model = item['MARCA / MODELO'] || item.MODEL || "";
+              mappedItem.plate = item['PLACA'] || item.PLATE || "";
+              const rawStatus = item['SITUAÇÃO'] || item.STATUS || 'Disponível';
+              mappedItem.status = rawStatus.includes('Disponivel') ? 'Disponível' : rawStatus;
+            }
 
-          const base = {
-            ...item,
-            ...mappedItem,
-            id: item.id || mappedItem.id || `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          };
+            const randomSuffix = Math.random().toString(36).substring(2, 7);
+            const id = item.id || mappedItem.id || `import-${Date.now()}-${idx}-${randomSuffix}`;
+            
+            if (registryTab === 'employees') {
+              return {
+                id,
+                name: mappedItem.name,
+                shortName: mappedItem.shortName,
+                role: mappedItem.role,
+                team: mappedItem.team,
+                active: item.ACTIVE === undefined ? true : (item.ACTIVE === 'true' || item.ACTIVE === '1' || item.ACTIVE === true),
+                canDrive: item.CANDRIVE === 'true' || item.CANDRIVE === '1' || item.CANDRIVE === true,
+                canActAlone: item.CANACTALONE === 'true' || item.CANACTALONE === '1' || item.CANACTALONE === true,
+              };
+            }
+            if (registryTab === 'works') {
+              return {
+                id,
+                name: mappedItem.name,
+                client: mappedItem.client,
+                costCenter: mappedItem.costCenter,
+                address: mappedItem.address,
+                standardTime: mappedItem.standardTime,
+                requiredTeamSize: item.REQUIREDTEAMSIZE ? Number(item.REQUIREDTEAMSIZE) : (mappedItem.requiredTeamSize || 0),
+                status: mappedItem.status || 'Ativa',
+                unit: mappedItem.unit || '',
+                type: mappedItem.type || '',
+                observations: mappedItem.observations || '',
+                standardLocation: mappedItem.standardLocation || 'No Cliente',
+              };
+            }
+            if (registryTab === 'fleet') {
+              return {
+                id,
+                model: mappedItem.model,
+                plate: mappedItem.plate,
+                status: mappedItem.status || 'Disponível',
+              };
+            }
+            if (registryTab === 'tools') {
+              return {
+                id,
+                name: item.NAME || item.name || "",
+                type: item.TIPO || item.type || "",
+                status: item.SITUAÇÃO || item.status || "Disponível",
+                quantity: item.QUANTITY ? Number(item.QUANTITY) : (item.quantity ? Number(item.quantity) : 0),
+              };
+            }
+            return { id, ...mappedItem };
+          });
 
-          // Specific field parsing to ensure types
-          if (registryTab === 'employees') {
-            return {
-              ...base,
-              active: base.active === undefined ? true : (base.active === 'true' || base.active === '1' || base.active === true),
-              canDrive: base.canDrive === 'true' || base.canDrive === '1' || base.canDrive === true,
-              canActAlone: base.canActAlone === 'true' || base.canActAlone === '1' || base.canActAlone === true,
-            };
-          }
-          if (registryTab === 'works') {
-            return {
-              ...base,
-              requiredTeamSize: item.requiredTeamSize ? Number(item.requiredTeamSize) : undefined,
-            };
-          }
-          if (registryTab === 'fleet') {
-            return {
-              ...base,
-            };
-          }
-          if (registryTab === 'tools') {
-            return {
-              ...base,
-              quantity: item.quantity ? Number(item.quantity) : 0,
-            };
-          }
-          return base;
-        });
-
+        let success = false;
         switch (registryTab) {
           case 'employees':
-            setEmployees(prev => [...prev, ...processedData]);
+            success = await setEmployees(prev => [...prev, ...processedData]);
             break;
           case 'works':
-            setWorks(prev => [...prev, ...processedData]);
+            success = await setWorks(prev => [...prev, ...processedData]);
             break;
           case 'fleet':
-            setFleet(prev => [...prev, ...processedData]);
+            success = await setFleet(prev => [...prev, ...processedData]);
             break;
           case 'tools':
-            setTools(prev => [...prev, ...processedData]);
+            success = await setTools(prev => [...prev, ...processedData]);
             break;
         }
         
-        alert(`${processedData.length} registros importados com sucesso!`);
+        if (success) {
+          alert(`${processedData.length} registros importados e salvos com sucesso!`);
+        } else {
+          alert(`Erro ao salvar os dados no banco de dados. Verifique o console para mais detalhes.`);
+        }
         if (fileInputRef.current) fileInputRef.current.value = '';
       },
       error: (error) => {
@@ -467,33 +502,44 @@ export const OperationalScale: React.FC = () => {
     });
   };
 
-  const handleDeleteRegistry = (id: string) => {
+  const handleDeleteRegistry = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este registro?")) return;
     
+    let success = false;
     switch (registryTab) {
       case 'employees':
-        setEmployees(prev => prev.filter(i => i.id !== id));
+        success = await setEmployees(prev => prev.filter(i => i.id !== id));
         break;
       case 'works':
-        setWorks(prev => prev.filter(i => i.id !== id));
+        success = await setWorks(prev => prev.filter(i => i.id !== id));
         break;
       case 'fleet':
-        setFleet(prev => prev.filter(i => i.id !== id));
+        success = await setFleet(prev => prev.filter(i => i.id !== id));
         break;
       case 'tools':
-        setTools(prev => prev.filter(i => i.id !== id));
+        success = await setTools(prev => prev.filter(i => i.id !== id));
         break;
+    }
+
+    if (!success) {
+      alert("Erro ao excluir registro do banco de dados.");
     }
   };
 
-  const handleDeleteScale = (id: string) => {
+  const handleDeleteScale = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir esta escala?")) return;
-    setScales(prev => prev.filter(s => s.id !== id));
+    const success = await setScales(prev => prev.filter(s => s.id !== id));
+    if (!success) {
+      alert("Erro ao excluir escala do banco de dados.");
+    }
   };
 
-  const handleDeleteAbsence = (id: string) => {
+  const handleDeleteAbsence = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este registro de ausência?")) return;
-    setAbsences(prev => prev.filter(a => a.id !== id));
+    const success = await setAbsences(prev => prev.filter(a => a.id !== id));
+    if (!success) {
+      alert("Erro ao excluir registro de ausência do banco de dados.");
+    }
   };
 
   // --- RENDERERS ---
@@ -1502,39 +1548,44 @@ export const OperationalScale: React.FC = () => {
                     };
                   }
 
+                  let success = false;
                   if (activeTab === 'absences') {
-                    setAbsences(prev => {
+                    success = await setAbsences(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'employees') {
-                    setEmployees(prev => {
+                    success = await setEmployees(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'works') {
-                    setWorks(prev => {
+                    success = await setWorks(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'fleet') {
-                    setFleet(prev => {
+                    success = await setFleet(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'tools') {
-                    setTools(prev => {
+                    success = await setTools(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   }
                   
-                  setIsEditingRegistry(false);
+                  if (success) {
+                    setIsEditingRegistry(false);
+                  } else {
+                    alert("Erro ao salvar registro no banco de dados.");
+                  }
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-900/40 transition-all active:scale-95"
               >

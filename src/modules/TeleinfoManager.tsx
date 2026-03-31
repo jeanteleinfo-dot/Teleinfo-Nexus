@@ -8,25 +8,7 @@ import {
   Plus, Trash2, MapPin, Building2, FileText, ChevronLeft, ChevronRight, User, Printer
 } from 'lucide-react';
 import { ManagerProject, Employee, Schedule, Absence, AbsenceType, BU, BUColorsHex } from '../types';
-import { syncToSupabase, fetchFromSupabase } from '../services/supabase';
-
-// Hook para Supabase
-function useSupabaseData<T>(tableName: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-    const [storedValue, setStoredValue] = useState<T>(initialValue);
-    useEffect(() => {
-        const load = async () => {
-            const data = await fetchFromSupabase<any>(tableName);
-            if (data && data.length > 0) setStoredValue(data as unknown as T);
-        };
-        load();
-    }, [tableName]);
-    const setValue = (value: T | ((val: T) => T)) => {
-        const val = value instanceof Function ? value(storedValue) : value;
-        setStoredValue(val);
-        if (Array.isArray(val)) syncToSupabase(tableName, val);
-    };
-    return [storedValue, setValue];
-}
+import { syncToSupabase, fetchFromSupabase, useSupabaseData } from '../services/supabase';
 
 // Sub-componentes (Dashboard, Schedule, etc.) mantidos mas usando dados do Supabase via Props
 const DashboardView: React.FC<{ projects: ManagerProject[], employees: Employee[], schedules: Schedule[] }> = ({ projects, employees, schedules }) => {

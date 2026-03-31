@@ -78,22 +78,25 @@ const parseGeneralCsv = (text: string): any[] => {
         transformHeader: (header) => header.trim().replace(/^\ufeff/i, "").toUpperCase(),
     });
 
-    return results.data.map((item: any, idx) => {
-        const percRaw = (item['%'] || "").toString().replace('%', '').replace(',', '.').trim();
-        return {
-            id: `gen-${item.ITEM || idx}-${Date.now()}`,
-            item: item.ITEM || "",
-            cliente: item.CLIENTE || "",
-            tipoProjeto: item['TIPO DE PROJETO'] || "",
-            tipoProduto: item['TIPO DE PRODUTO'] || "",
-            squadLeader: item['SQUAD LEADER'] || "",
-            bus: item.BUS || item.BUs || "",
-            cCusto: item['C.CUSTO'] || item['C.Custo'] || "",
-            escopo: item.ESCOPO || "",
-            status: item.STATUS || "",
-            perc: parseFloat(percRaw) || 0
-        };
-    });
+    return results.data
+        .filter((item: any) => item.ITEM || item.CLIENTE || item.STATUS) // Filtra linhas vazias
+        .map((item: any, idx) => {
+            const percRaw = (item['%'] || "").toString().replace('%', '').replace(',', '.').trim();
+            const randomSuffix = Math.random().toString(36).substring(2, 7);
+            return {
+                id: `gen-${item.ITEM || idx}-${Date.now()}-${randomSuffix}`,
+                item: item.ITEM || "",
+                cliente: item.CLIENTE || "",
+                tipoProjeto: item['TIPO DE PROJETO'] || "",
+                tipoProduto: item['TIPO DE PRODUTO'] || "",
+                squadLeader: item['SQUAD LEADER'] || "",
+                bus: item.BUS || item.BUs || "",
+                cCusto: item['C.CUSTO'] || item['C.Custo'] || "",
+                escopo: item.ESCOPO || "",
+                status: item.STATUS || "",
+                perc: parseFloat(percRaw) || 0
+            };
+        });
 };
 
 const parseCommandPanelCsv = (text: string): CommandPanelPending[] => {
@@ -107,8 +110,9 @@ const parseCommandPanelCsv = (text: string): CommandPanelPending[] => {
     return results.data
         .filter((item: any) => item.CLIENTE && item.PROJETO) // Filter empty rows
         .map((item: any, idx) => {
+            const randomSuffix = Math.random().toString(36).substring(2, 7);
             return {
-                id: `cmd-${idx}-${Date.now()}`,
+                id: `cmd-${idx}-${Date.now()}-${randomSuffix}`,
                 prioridade: parseInt(item.PRIORIDADE) || 0,
                 criticidade: item.CRITICIDADE || "",
                 cliente: item.CLIENTE || "",
@@ -127,9 +131,9 @@ const parseCommandPanelCsv = (text: string): CommandPanelPending[] => {
 
 interface GeneralDashboardProps {
     projects: any[];
-    setProjects: (projects: any[]) => void;
+    setProjects: (projects: any[] | ((prev: any[]) => any[])) => Promise<boolean>;
     commandPanelPendings: CommandPanelPending[];
-    setCommandPanelPendings: (pendings: CommandPanelPending[]) => void;
+    setCommandPanelPendings: (pendings: CommandPanelPending[] | ((prev: CommandPanelPending[]) => CommandPanelPending[])) => Promise<boolean>;
 }
 
 const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setProjects, commandPanelPendings, setCommandPanelPendings }) => {
@@ -206,13 +210,18 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
                 const { error: deleteError } = await supabase.from('general_projects').delete().neq('id', '0');
                 if (deleteError) console.error("Erro ao limpar dados antigos:", deleteError);
                 
-                setProjects(parsed);
-                // Simple feedback
-                const toast = document.createElement('div');
-                toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
-                toast.innerText = `✓ ${parsed.length} projetos importados com sucesso!`;
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 3000);
+                const success = await setProjects(parsed);
+                
+                if (success) {
+                    // Simple feedback
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
+                    toast.innerText = `✓ ${parsed.length} projetos importados com sucesso!`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
+                } else {
+                    throw new Error("Falha ao salvar no Supabase");
+                }
             } catch (err) {
                 console.error("Erro na importação:", err);
                 setConfirmModal({
@@ -254,13 +263,18 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
                 const { error: deleteError } = await supabase.from('command_panel_pendings').delete().neq('id', '0');
                 if (deleteError) console.error("Erro ao limpar dados antigos:", deleteError);
                 
-                setCommandPanelPendings(parsed);
-                // Simple feedback
-                const toast = document.createElement('div');
-                toast.className = 'fixed bottom-10 right-10 bg-purple-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
-                toast.innerText = `✓ ${parsed.length} pendências de quadros importadas!`;
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 3000);
+                const success = await setCommandPanelPendings(parsed);
+                
+                if (success) {
+                    // Simple feedback
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed bottom-10 right-10 bg-purple-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
+                    toast.innerText = `✓ ${parsed.length} pendências de quadros importadas!`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
+                } else {
+                    throw new Error("Falha ao salvar no Supabase");
+                }
             } catch (err) {
                 console.error("Erro na importação de quadros:", err);
                 setConfirmModal({
@@ -305,8 +319,8 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
                                     onConfirm: async () => {
                                         await supabase.from('general_projects').delete().neq('id', '0');
                                         await supabase.from('command_panel_pendings').delete().neq('id', '0');
-                                        setProjects([]);
-                                        setCommandPanelPendings([]);
+                                        await setProjects([]);
+                                        await setCommandPanelPendings([]);
                                         setConfirmModal(null);
                                     },
                                     type: 'danger'
@@ -441,7 +455,7 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
 
 interface MonitoringProps {
     projects: DetailedProject[];
-    setProjects: React.Dispatch<React.SetStateAction<DetailedProject[]>>;
+    setProjects: (value: DetailedProject[] | ((val: DetailedProject[]) => DetailedProject[])) => Promise<boolean>;
     onGenerateAiReport: (project: DetailedProject) => void;
     isGeneratingReport: boolean;
 }
@@ -492,20 +506,22 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
             : projects.map(p => p.id === finalId ? projectToSave : p);
         
         try {
-            setProjects(updated);
+            const success = await setProjects(updated);
             
-            // Forçamos uma pequena espera para o estado atualizar e o hook de sync ser chamado
-            console.log("[Monitoring] Estado local atualizado. Aguardando confirmação do banco...");
-            
-            setViewMode('list');
-            setEditingProject(null);
-            
-            // Feedback visual imediato
-            const toast = document.createElement('div');
-            toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] animate-bounce font-bold';
-            toast.innerText = '✓ Projeto salvo e sincronizando...';
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            if (success) {
+                console.log("[Monitoring] Projeto salvo com sucesso no banco.");
+                setViewMode('list');
+                setEditingProject(null);
+                
+                // Feedback visual imediato
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] animate-bounce font-bold';
+                toast.innerText = '✓ Projeto salvo com sucesso!';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            } else {
+                throw new Error("Falha ao sincronizar com Supabase");
+            }
 
         } catch (err) {
             console.error("[Monitoring] Erro ao salvar:", err);
@@ -633,9 +649,13 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                                     isOpen: true,
                                                     title: "Arquivar Obra",
                                                     message: `Deseja arquivar a obra "${p.name}"? Ela será movida para a seção de Lições Aprendidas.`,
-                                                    onConfirm: () => {
-                                                        setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
-                                                        setConfirmModal(null);
+                                                    onConfirm: async () => {
+                                                        const success = await setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
+                                                        if (success) {
+                                                            setConfirmModal(null);
+                                                        } else {
+                                                            alert("Erro ao arquivar projeto no banco de dados.");
+                                                        }
                                                     },
                                                     type: 'info'
                                                 });
@@ -1774,7 +1794,7 @@ const PDFReportTemplate: React.FC<{ content: string; projectName: string; id: st
 
 const LessonsLearnedView: React.FC<{ 
     projects: DetailedProject[]; 
-    setProjects: React.Dispatch<React.SetStateAction<DetailedProject[]>>;
+    setProjects: (value: DetailedProject[] | ((val: DetailedProject[]) => DetailedProject[])) => Promise<boolean>;
     hasApiKey: boolean;
     onOpenKeySelector: () => void;
     onExportPDF: (content: string, projectName: string, id: string) => Promise<void>;
@@ -1956,8 +1976,8 @@ const LessonsLearnedView: React.FC<{
                                                 isOpen: true,
                                                 title: "Restaurar Obra",
                                                 message: `Restaurar obra ${p.name} para Auditoria Ativa?`,
-                                                onConfirm: () => {
-                                                    setProjects(prev => prev.map(x => x.id === p.id ? { ...x, status: 'active' } : x));
+                                                onConfirm: async () => {
+                                                    await setProjects(prev => prev.map(x => x.id === p.id ? { ...x, status: 'active' } : x));
                                                     setConfirmModal(null);
                                                 },
                                                 type: 'info'
@@ -1974,8 +1994,8 @@ const LessonsLearnedView: React.FC<{
                                                 isOpen: true,
                                                 title: "Excluir Obra",
                                                 message: `Excluir permanentemente ${p.name}? Esta ação não pode ser desfeita.`,
-                                                onConfirm: () => {
-                                                    setProjects(prev => prev.filter(x => x.id !== p.id));
+                                                onConfirm: async () => {
+                                                    await setProjects(prev => prev.filter(x => x.id !== p.id));
                                                     setConfirmModal(null);
                                                 },
                                                 type: 'danger'
