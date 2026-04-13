@@ -69,12 +69,14 @@ export const OperationalScale: React.FC = () => {
   const [registryTab, setRegistryTab] = useState<'employees' | 'works' | 'fleet' | 'tools'>('employees');
 
   // Data
-  const [employees, setEmployees] = useSupabaseData<Employee[]>('employees', []);
-  const [works, setWorks] = useSupabaseData<WorkContract[]>('work_contracts', []);
-  const [fleet, setFleet] = useSupabaseData<FleetVehicle[]>('fleet_vehicles', []);
-  const [tools, setTools] = useSupabaseData<ToolResource[]>('tool_resources', []);
-  const [absences, setAbsences] = useSupabaseData<Absence[]>('absences', []);
-  const [scales, setScales] = useSupabaseData<DailyScale[]>('daily_scales', []);
+  const [employees, setEmployees, , loadingEmployees, errorEmployees] = useSupabaseData<Employee[]>('employees', []);
+  const [works, setWorks, , loadingWorks, errorWorks] = useSupabaseData<WorkContract[]>('work_contracts', []);
+  const [fleet, setFleet, , loadingFleet, errorFleet] = useSupabaseData<FleetVehicle[]>('fleet_vehicles', []);
+  const [tools, setTools, , loadingTools, errorTools] = useSupabaseData<ToolResource[]>('tool_resources', []);
+  const [absences, setAbsences, , loadingAbsences, errorAbsences] = useSupabaseData<Absence[]>('absences', []);
+  const [scales, setScales, , loadingScales, errorScales] = useSupabaseData<DailyScale[]>('daily_scales', []);
+
+  const isDataLoading = loadingEmployees || loadingWorks || loadingFleet || loadingTools || loadingAbsences || loadingScales;
 
   // Scale View State
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -160,13 +162,13 @@ export const OperationalScale: React.FC = () => {
       updatedAt: new Date().toISOString(),
     }));
 
-    const success = await setScales(prev => [...prev, ...newScales]);
-    if (success) {
+    const result = await setScales(prev => [...prev, ...newScales]);
+    if (result.success) {
       setIsMassScaling(false);
       setMassScaleData({ workId: '', employeeIds: [], date: selectedDate, time: '', vehicleId: '', observations: '' });
       alert(`${newScales.length} colaboradores escalados com sucesso!`);
     } else {
-      alert("Erro ao salvar escala em massa no banco de dados.");
+      alert(`Erro ao salvar escala em massa: ${result.error}`);
     }
   };
 
@@ -207,7 +209,7 @@ export const OperationalScale: React.FC = () => {
       updatedAt: new Date().toISOString(),
     } as DailyScale;
 
-    const success = await setScales(prev => {
+    const result = await setScales(prev => {
       const index = prev.findIndex(s => s.id === newScale.id);
       if (index >= 0) {
         const updated = [...prev];
@@ -217,11 +219,11 @@ export const OperationalScale: React.FC = () => {
       return [...prev, newScale];
     });
 
-    if (success) {
+    if (result.success) {
       setIsEditingScale(false);
       setEditingScale(null);
     } else {
-      alert("Erro ao salvar escala no banco de dados.");
+      alert(`Erro ao salvar escala: ${result.error}`);
     }
   };
 
@@ -240,11 +242,11 @@ export const OperationalScale: React.FC = () => {
       updatedAt: new Date().toISOString(),
     }));
 
-    const success = await setScales(prev => [...prev, ...newScales]);
-    if (success) {
+    const result = await setScales(prev => [...prev, ...newScales]);
+    if (result.success) {
       alert(`${newScales.length} escalas copiadas para ${selectedDate}.`);
     } else {
-      alert("Erro ao copiar escalas para o banco de dados.");
+      alert(`Erro ao copiar escalas: ${result.error}`);
     }
   };
 
@@ -472,26 +474,26 @@ export const OperationalScale: React.FC = () => {
             return { id, ...mappedItem };
           });
 
-        let success = false;
+        let result: { success: boolean; error?: string; warning?: string } = { success: false };
         switch (registryTab) {
           case 'employees':
-            success = await setEmployees(prev => [...prev, ...processedData]);
+            result = await setEmployees(prev => [...prev, ...processedData]);
             break;
           case 'works':
-            success = await setWorks(prev => [...prev, ...processedData]);
+            result = await setWorks(prev => [...prev, ...processedData]);
             break;
           case 'fleet':
-            success = await setFleet(prev => [...prev, ...processedData]);
+            result = await setFleet(prev => [...prev, ...processedData]);
             break;
           case 'tools':
-            success = await setTools(prev => [...prev, ...processedData]);
+            result = await setTools(prev => [...prev, ...processedData]);
             break;
         }
         
-        if (success) {
-          alert(`${processedData.length} registros importados e salvos com sucesso!`);
+        if (result.success) {
+          alert(`${processedData.length} registros importados e salvos com sucesso! ${result.warning || ''}`);
         } else {
-          alert(`Erro ao salvar os dados no banco de dados. Verifique o console para mais detalhes.`);
+          alert(`Erro ao salvar os dados: ${result.error}`);
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
       },
@@ -505,40 +507,40 @@ export const OperationalScale: React.FC = () => {
   const handleDeleteRegistry = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este registro?")) return;
     
-    let success = false;
+    let result: { success: boolean; error?: string; warning?: string } = { success: false };
     switch (registryTab) {
       case 'employees':
-        success = await setEmployees(prev => prev.filter(i => i.id !== id));
+        result = await setEmployees(prev => prev.filter(i => i.id !== id));
         break;
       case 'works':
-        success = await setWorks(prev => prev.filter(i => i.id !== id));
+        result = await setWorks(prev => prev.filter(i => i.id !== id));
         break;
       case 'fleet':
-        success = await setFleet(prev => prev.filter(i => i.id !== id));
+        result = await setFleet(prev => prev.filter(i => i.id !== id));
         break;
       case 'tools':
-        success = await setTools(prev => prev.filter(i => i.id !== id));
+        result = await setTools(prev => prev.filter(i => i.id !== id));
         break;
     }
 
-    if (!success) {
-      alert("Erro ao excluir registro do banco de dados.");
+    if (!result.success) {
+      alert(`Erro ao excluir registro: ${result.error}`);
     }
   };
 
   const handleDeleteScale = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir esta escala?")) return;
-    const success = await setScales(prev => prev.filter(s => s.id !== id));
-    if (!success) {
-      alert("Erro ao excluir escala do banco de dados.");
+    const result = await setScales(prev => prev.filter(s => s.id !== id));
+    if (!result.success) {
+      alert(`Erro ao excluir escala: ${result.error}`);
     }
   };
 
   const handleDeleteAbsence = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este registro de ausência?")) return;
-    const success = await setAbsences(prev => prev.filter(a => a.id !== id));
-    if (!success) {
-      alert("Erro ao excluir registro de ausência do banco de dados.");
+    const result = await setAbsences(prev => prev.filter(a => a.id !== id));
+    if (!result.success) {
+      alert(`Erro ao excluir registro de ausência: ${result.error}`);
     }
   };
 
@@ -1548,43 +1550,44 @@ export const OperationalScale: React.FC = () => {
                     };
                   }
 
-                  let success = false;
+                  let result: { success: boolean; error?: string; warning?: string } = { success: false };
                   if (activeTab === 'absences') {
-                    success = await setAbsences(prev => {
+                    result = await setAbsences(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'employees') {
-                    success = await setEmployees(prev => {
+                    result = await setEmployees(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'works') {
-                    success = await setWorks(prev => {
+                    result = await setWorks(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'fleet') {
-                    success = await setFleet(prev => {
+                    result = await setFleet(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   } else if (registryTab === 'tools') {
-                    success = await setTools(prev => {
+                    result = await setTools(prev => {
                       const idx = prev.findIndex(i => i.id === newItem.id);
                       if (idx >= 0) { const u = [...prev]; u[idx] = newItem; return u; }
                       return [...prev, newItem];
                     });
                   }
                   
-                  if (success) {
+                  if (result.success) {
                     setIsEditingRegistry(false);
+                    if (result.warning) console.warn(result.warning);
                   } else {
-                    alert("Erro ao salvar registro no banco de dados.");
+                    alert(`Erro ao salvar registro: ${result.error}`);
                   }
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-900/40 transition-all active:scale-95"

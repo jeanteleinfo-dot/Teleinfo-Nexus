@@ -131,9 +131,9 @@ const parseCommandPanelCsv = (text: string): CommandPanelPending[] => {
 
 interface GeneralDashboardProps {
     projects: any[];
-    setProjects: (projects: any[] | ((prev: any[]) => any[])) => Promise<boolean>;
+    setProjects: (projects: any[] | ((prev: any[]) => any[])) => Promise<{ success: boolean; error?: string; warning?: string }>;
     commandPanelPendings: CommandPanelPending[];
-    setCommandPanelPendings: (pendings: CommandPanelPending[] | ((prev: CommandPanelPending[]) => CommandPanelPending[])) => Promise<boolean>;
+    setCommandPanelPendings: (pendings: CommandPanelPending[] | ((prev: CommandPanelPending[]) => CommandPanelPending[])) => Promise<{ success: boolean; error?: string; warning?: string }>;
 }
 
 const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setProjects, commandPanelPendings, setCommandPanelPendings }) => {
@@ -455,7 +455,7 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
 
 interface MonitoringProps {
     projects: DetailedProject[];
-    setProjects: (value: DetailedProject[] | ((val: DetailedProject[]) => DetailedProject[])) => Promise<boolean>;
+    setProjects: (value: DetailedProject[] | ((val: DetailedProject[]) => DetailedProject[])) => Promise<{ success: boolean; error?: string; warning?: string }>;
     onGenerateAiReport: (project: DetailedProject) => void;
     isGeneratingReport: boolean;
 }
@@ -495,8 +495,7 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
         
         const projectToSave = { 
             ...editingProject, 
-            id: finalId,
-            updated_at: new Date().toISOString() 
+            id: finalId
         };
 
         console.log("[Monitoring] Iniciando salvamento do projeto:", projectToSave);
@@ -506,9 +505,9 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
             : projects.map(p => p.id === finalId ? projectToSave : p);
         
         try {
-            const success = await setProjects(updated);
+            const result = await setProjects(updated);
             
-            if (success) {
+            if (result.success) {
                 console.log("[Monitoring] Projeto salvo com sucesso no banco.");
                 setViewMode('list');
                 setEditingProject(null);
@@ -520,15 +519,15 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                 document.body.appendChild(toast);
                 setTimeout(() => toast.remove(), 3000);
             } else {
-                throw new Error("Falha ao sincronizar com Supabase");
+                throw new Error(result.error || "Falha ao sincronizar com Supabase");
             }
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("[Monitoring] Erro ao salvar:", err);
             setConfirmModal({
                 isOpen: true,
                 title: "Erro ao Salvar",
-                message: "Erro ao processar salvamento. Verifique o console para detalhes.",
+                message: `Erro ao processar salvamento: ${err?.message || 'Erro desconhecido'}. Verifique o console para detalhes técnicos.`,
                 onConfirm: () => setConfirmModal(null),
                 type: 'danger',
                 isAlert: true
@@ -650,11 +649,11 @@ const MonitoringView: React.FC<MonitoringProps> = ({ projects, setProjects, onGe
                                                     title: "Arquivar Obra",
                                                     message: `Deseja arquivar a obra "${p.name}"? Ela será movida para a seção de Lições Aprendidas.`,
                                                     onConfirm: async () => {
-                                                        const success = await setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
-                                                        if (success) {
+                                                        const result = await setProjects(projects.map(x => x.id === p.id ? { ...x, status: 'archived' } : x));
+                                                        if (result.success) {
                                                             setConfirmModal(null);
                                                         } else {
-                                                            alert("Erro ao arquivar projeto no banco de dados.");
+                                                            alert(`Erro ao arquivar projeto: ${result.error}`);
                                                         }
                                                     },
                                                     type: 'info'
@@ -1794,7 +1793,7 @@ const PDFReportTemplate: React.FC<{ content: string; projectName: string; id: st
 
 const LessonsLearnedView: React.FC<{ 
     projects: DetailedProject[]; 
-    setProjects: (value: DetailedProject[] | ((val: DetailedProject[]) => DetailedProject[])) => Promise<boolean>;
+    setProjects: (value: DetailedProject[] | ((val: DetailedProject[]) => DetailedProject[])) => Promise<{ success: boolean; error?: string; warning?: string }>;
     hasApiKey: boolean;
     onOpenKeySelector: () => void;
     onExportPDF: (content: string, projectName: string, id: string) => Promise<void>;
@@ -2059,10 +2058,12 @@ const LessonsLearnedView: React.FC<{
 
 export const TeleinfoReport: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'monitoring' | 'presentation' | 'lessons_learned'>('dashboard');
-    const [generalProjects, setGeneralProjects, reloadGeneral] = useSupabaseData<any[]>('general_projects', []);
-    const [detailedProjects, setDetailedProjects, reloadDetailed] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
-    const [buyingStatus, setBuyingStatus, reloadBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
-    const [commandPanelPendings, setCommandPanelPendings, reloadCommandPanel] = useSupabaseData<CommandPanelPending[]>('command_panel_pendings', []);
+    const [generalProjects, setGeneralProjects, reloadGeneral, loadingGeneral, errorGeneral] = useSupabaseData<any[]>('general_projects', []);
+    const [detailedProjects, setDetailedProjects, reloadDetailed, loadingDetailed, errorDetailed] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
+    const [buyingStatus, setBuyingStatus, reloadBuying, loadingBuying, errorBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+    const [commandPanelPendings, setCommandPanelPendings, reloadCommandPanel, loadingCommandPanel, errorCommandPanel] = useSupabaseData<CommandPanelPending[]>('command_panel_pendings', []);
+
+    const isDataLoading = loadingGeneral || loadingDetailed || loadingBuying || loadingCommandPanel;
 
     const handleSync = useCallback(() => {
         reloadGeneral();

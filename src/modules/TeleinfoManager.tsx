@@ -43,10 +43,12 @@ const DashboardView: React.FC<{ projects: ManagerProject[], employees: Employee[
 export const TeleinfoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  const [projects, setProjects] = useSupabaseData<ManagerProject[]>('manager_projects', []);
-  const [employees, setEmployees] = useSupabaseData<Employee[]>('manager_employees', []);
-  const [schedules, setSchedules] = useSupabaseData<Schedule[]>('manager_schedules', []);
-  const [absences, setAbsences] = useSupabaseData<Absence[]>('manager_absences', []);
+  const [projects, setProjects, , loadingProjects, errorProjects] = useSupabaseData<ManagerProject[]>('manager_projects', []);
+  const [employees, setEmployees, , loadingEmployees, errorEmployees] = useSupabaseData<Employee[]>('manager_employees', []);
+  const [schedules, setSchedules, , loadingSchedules, errorSchedules] = useSupabaseData<Schedule[]>('manager_schedules', []);
+  const [absences, setAbsences, , loadingAbsences, errorAbsences] = useSupabaseData<Absence[]>('manager_absences', []);
+
+  const isDataLoading = loadingProjects || loadingEmployees || loadingSchedules || loadingAbsences;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },

@@ -148,24 +148,19 @@ export const Dashboard: React.FC = () => {
   const [currentModule, setCurrentModule] = useState<AppModule>(AppModule.DASHBOARD);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const [generalProjects, , reloadGeneral] = useSupabaseData<any[]>('general_projects', []);
-  const [buyingStatus, , reloadBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
-  const [detailedAudits, , reloadDetailed] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
-  const [dataLoading, setDataLoading] = useState(false);
+  const [generalProjects, , reloadGeneral, loadingGeneral, errorGeneral] = useSupabaseData<any[]>('general_projects', []);
+  const [buyingStatus, , reloadBuying, loadingBuying, errorBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+  const [detailedAudits, , reloadDetailed, loadingDetailed, errorDetailed] = useSupabaseData<DetailedProject[]>('detailed_projects', []);
 
-  const loadData = useCallback(async () => {
-    setDataLoading(true);
+  const isDataLoading = loadingGeneral || loadingBuying || loadingDetailed;
+
+  const handleRefresh = useCallback(async () => {
     await Promise.all([
       reloadGeneral(),
       reloadBuying(),
       reloadDetailed()
     ]);
-    setDataLoading(false);
   }, [reloadGeneral, reloadBuying, reloadDetailed]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   const renderModule = () => {
     switch (currentModule) {
@@ -176,7 +171,7 @@ export const Dashboard: React.FC = () => {
       case AppModule.USER_MANAGEMENT: return <UserManagement />;
       case AppModule.DASHBOARD:
       default:
-        if (dataLoading && generalProjects.length === 0) {
+        if (isDataLoading && generalProjects.length === 0) {
             return (
               <div className="flex flex-col items-center justify-center h-96 space-y-4">
                 <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
@@ -197,7 +192,7 @@ export const Dashboard: React.FC = () => {
                   <p className="text-green-500 text-xs font-black">Cloud Online</p>
                 </div>
                 <div className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_#10b981]" />
-                <button onClick={loadData} className="p-1 text-nexus-500 hover:text-white"><RefreshCw size={14}/></button>
+                <button onClick={handleRefresh} className="p-1 text-nexus-500 hover:text-white"><RefreshCw size={14}/></button>
               </div>
             </div>
             <LandingDashboard onNavigate={setCurrentModule} generalProjects={generalProjects} buyingStatus={buyingStatus} detailedAudits={detailedAudits} />

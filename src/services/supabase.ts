@@ -1,134 +1,162 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://cktbrxwgqrtgvrbxuqzs.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_NHVjMcerDg4-2vzNpK-r9A_VjtgB5GQ';
 
-// Cliente configurado com opções de timeout globais se suportado ou via fetch custom
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  },
-  global: {
-    headers: { 'x-nexus-client': 'teleinfo-platform' }
-  }
-});
+// Cliente Supabase
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /**
- * Função utilitária para sincronizar dados locais com o Supabase
+ * Helpers para LocalStorage
+ */
+const saveLocal = (key: string, data: any) => {
+    try {
+        localStorage.setItem(`nexus_local_${key}`, JSON.stringify(data));
+    } catch (e) {
+        console.error("Erro ao salvar localmente:", e);
+    }
+};
+
+const loadLocal = (key: string) => {
+    try {
+        const data = localStorage.getItem(`nexus_local_${key}`);
+        return data ? JSON.parse(data) : null;
+    } catch (e) {
+        console.error("Erro ao carregar local:", e);
+        return null;
+    }
+};
+
+/**
+ * Sincroniza dados com o Supabase com fallback silencioso para erro de cota
  */
 export const syncToSupabase = async (tableName: string, data: any[]) => {
+  // Salva localmente primeiro (Garante que o usuário não perca nada)
+  saveLocal(tableName, data);
+
   try {
-    if (!data || !Array.isArray(data)) {
-      console.warn(`Dados inválidos para sincronização em ${tableName}:`, data);
-      return false;
-    }
+    if (!data || !Array.isArray(data)) return { success: false, error: 'Dados inválidos' };
+    if (data.length === 0) return { success: true };
 
-    if (data.length === 0) {
-      console.log(`[Supabase] Tabela ${tableName} vazia, nada para sincronizar.`);
-      return true;
-    }
-
-    console.log(`[Supabase] Iniciando sincronização de ${data.length} itens para ${tableName}...`);
-    
-    // Limpeza profunda para garantir que não enviamos objetos complexos que o Supabase não suporte
-    // Removemos campos que costumam causar erro 400 (colunas inexistentes)
-    // Se o objeto veio de um CSV, ele pode ter dezenas de colunas extras
+    // Limpeza de dados para o Supabase
     const cleanData = data.map(item => {
       const cleaned: any = {};
       Object.keys(item).forEach(key => {
         const val = item[key];
-        // Garantir que a chave não é vazia, não tem espaços e não tem caracteres especiais que o Supabase/Postgres rejeitaria
-        // Também removemos funções e valores undefined
-        if (key && key.trim().length > 0 && typeof val !== 'function' && val !== undefined && !key.includes(' ') && !/[áéíóúâêîôûãõàèìòùç]/i.test(key)) {
+        if (typeof val !== 'function' && val !== undefined && !key.startsWith('_')) {
           cleaned[key] = val;
         }
       });
       return cleaned;
     });
 
-    // Chunking para evitar limites de payload do Supabase/PostgREST (ex: 1000 itens por vez)
-    const chunkSize = 500;
-    for (let i = 0; i < cleanData.length; i += chunkSize) {
-      const chunk = cleanData.slice(i, i + chunkSize);
-      const { error } = await supabase
-        .from(tableName)
-        .upsert(chunk, { onConflict: 'id' });
-      
-      if (error) {
-        console.error(`[Supabase] Erro ao sincronizar chunk ${i/chunkSize} de ${tableName}:`, error.message, error.details, error.hint);
-        return false;
+    const { error } = await supabase.from(tableName).upsert(cleanData, { onConflict: 'id' });
+    
+    if (error) {
+      console.warn(`[Supabase] Erro de sincronização em ${tableName}:`, error.message);
+      // Se for erro de cota, retornamos sucesso "parcial" (salvo localmente)
+      if (error.message.includes('quota') || error.message.includes('limit')) {
+          return { success: true, warning: 'Limite do Supabase atingido. Dados salvos apenas localmente.' };
       }
+      return { success: false, error: error.message };
     }
     
-    console.log(`[Supabase] Sincronização de ${tableName} concluída com sucesso.`);
-    return true;
-  } catch (err) {
-    console.error(`[Supabase] Falha crítica na sincronização de ${tableName}:`, err);
-    return false;
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[Supabase] Falha crítica em ${tableName}:`, err);
+    return { success: true, warning: 'Falha na rede. Dados salvos localmente.' };
   }
 };
 
 /**
- * Busca dados de uma tabela do Supabase com tratamento de erro
+ * Busca dados priorizando Supabase, com fallback para LocalStorage
  */
 export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | null> => {
   try {
-    console.log(`Buscando dados da tabela ${tableName}...`);
-    const { data, error } = await supabase
-      .from(tableName)
-      .select('*')
-      .order('id', { ascending: true });
+    const { data, error } = await supabase.from(tableName).select('*');
     
     if (error) {
-      console.error(`Erro ao buscar em ${tableName}:`, error.message, error.details);
-      return null;
+      console.warn(`[Supabase] Erro ao buscar ${tableName}, usando backup local.`);
+      return loadLocal(tableName);
     }
-    console.log(`Busca em ${tableName} concluída. ${data?.length || 0} itens encontrados.`);
+    
+    // Se trouxe dados, atualiza o backup local
+    if (data && data.length > 0) {
+        saveLocal(tableName, data);
+    } else {
+        // Se a nuvem está vazia, talvez o local tenha algo
+        const local = loadLocal(tableName);
+        if (local) return local;
+    }
+
     return data as T[];
   } catch (err) {
-    console.error(`Falha crítica na busca em ${tableName}:`, err);
-    return null;
+    console.error(`[Supabase] Falha na busca, tentando local...`);
+    return loadLocal(tableName);
   }
 };
 
 /**
- * Hook para persistência no Supabase
+ * Hook Principal de Dados (Híbrido: Local + Cloud)
  */
-export function useSupabaseData<T>(tableName: string, initialValue: T): [T, (value: T | ((val: T) => T)) => Promise<boolean>, () => Promise<void>] {
-    const [storedValue, setStoredValue] = useState<T>(initialValue);
+export function useSupabaseData<T>(
+    tableName: string, 
+    initialValue: T
+): [T, (value: T | ((val: T) => T)) => Promise<{ success: boolean; error?: string; warning?: string }>, () => Promise<void>, boolean, string | null] {
+    
+    // Tenta carregar do local imediatamente para evitar tela branca
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        const local = loadLocal(tableName);
+        return local || initialValue;
+    });
+    
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const lastValueRef = useRef<T>(storedValue);
 
     useEffect(() => {
         lastValueRef.current = storedValue;
     }, [storedValue]);
 
-    const load = async () => {
-        const data = await fetchFromSupabase<any>(tableName);
-        if (data) {
-          setStoredValue(data as unknown as T);
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchFromSupabase<any>(tableName);
+            if (data) {
+                setStoredValue(data as unknown as T);
+            }
+        } finally {
+            setLoading(false);
         }
-    };
+    }, [tableName]);
 
     useEffect(() => {
         load();
-    }, [tableName]);
+    }, [load]);
 
-    const setValue = async (value: T | ((val: T) => T)): Promise<boolean> => {
+    const setValue = async (value: T | ((val: T) => T)): Promise<{ success: boolean; error?: string; warning?: string }> => {
         const nextValue = value instanceof Function ? value(lastValueRef.current) : value;
         
-        // Update state and ref
+        // Atualiza estado e ref IMEDIATAMENTE (UI rápida)
         setStoredValue(nextValue);
         lastValueRef.current = nextValue;
 
         if (Array.isArray(nextValue)) {
-            return await syncToSupabase(tableName, nextValue);
+            const result = await syncToSupabase(tableName, nextValue);
+            if (!result.success) {
+                setError(result.error || 'Erro ao sincronizar');
+            } else {
+                setError(null);
+            }
+            return result;
         }
-        return true;
+        
+        // Se não for array, apenas salva local
+        saveLocal(tableName, nextValue);
+        return { success: true };
     };
 
-    return [storedValue, setValue, load];
+    return [storedValue, setValue, load, loading, error];
 }

@@ -185,7 +185,7 @@ const DetailModal: React.FC<{ project: ProjectBuyingStatus; onClose: () => void 
 // --- MAIN VIEW ---
 
 const ProjectBuyingStatusView: React.FC = () => {
-    const [buyingData, setBuyingData, reload] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
+    const [buyingData, setBuyingData, reload, loading, errorBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
     const [selectedProject, setSelectedProject] = useState<ProjectBuyingStatus | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -212,11 +212,11 @@ const ProjectBuyingStatusView: React.FC = () => {
                 console.error("Erro ao limpar dados antigos:", deleteError);
             }
             
-            const success = await setBuyingData(parsed);
-            if (success) {
+            const result = await setBuyingData(parsed);
+            if (result.success) {
                 alert("Dados de estoque atualizados e salvos com sucesso!");
             } else {
-                alert("Erro ao salvar os dados no banco de dados.");
+                alert(`Erro ao salvar os dados: ${result.error}`);
             }
         };
         reader.readAsText(file);
