@@ -154,6 +154,15 @@ export const Dashboard: React.FC = () => {
 
   const isDataLoading = loadingGeneral || loadingBuying || loadingDetailed;
 
+  const SyncBadge = () => (
+    <div className="fixed bottom-4 left-4 z-[100] flex items-center gap-2 bg-nexus-900/80 backdrop-blur border border-nexus-700 px-3 py-1.5 rounded-full shadow-2xl no-print">
+        <div className={`w-2 h-2 rounded-full ${isDataLoading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+        <span className="text-[9px] font-black text-nexus-400 uppercase tracking-widest">
+            {isDataLoading ? 'Sincronizando...' : 'Local-First Ativo'}
+        </span>
+    </div>
+  );
+
   const handleRefresh = useCallback(async () => {
     await Promise.all([
       reloadGeneral(),
@@ -203,6 +212,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-nexus-900 overflow-hidden">
+      <SyncBadge />
       {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm no-print" onClick={() => setSidebarOpen(false)} />}
       <div className="no-print">
         <Sidebar currentModule={currentModule} onNavigate={(mod) => { setCurrentModule(mod); if (window.innerWidth < 768) setSidebarOpen(false); }} isOpen={sidebarOpen} />

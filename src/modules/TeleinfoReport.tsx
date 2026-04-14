@@ -210,24 +210,24 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
                 const { error: deleteError } = await supabase.from('general_projects').delete().neq('id', '0');
                 if (deleteError) console.error("Erro ao limpar dados antigos:", deleteError);
                 
-                const success = await setProjects(parsed);
+                const result = await setProjects(parsed);
                 
-                if (success) {
+                if (result.success) {
                     // Simple feedback
                     const toast = document.createElement('div');
                     toast.className = 'fixed bottom-10 right-10 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
-                    toast.innerText = `✓ ${parsed.length} projetos importados com sucesso!`;
+                    toast.innerText = `✓ ${parsed.length} projetos importados com sucesso! ${result.warning || ''}`;
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 3000);
                 } else {
-                    throw new Error("Falha ao salvar no Supabase");
+                    throw new Error(result.error || "Falha ao salvar no Supabase");
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Erro na importação:", err);
                 setConfirmModal({
                     isOpen: true,
                     title: "Erro na Importação",
-                    message: "Erro ao importar dados. Verifique o console.",
+                    message: `Erro ao importar dados: ${err?.message || 'Erro desconhecido'}`,
                     onConfirm: () => setConfirmModal(null),
                     type: 'danger',
                     isAlert: true
@@ -263,24 +263,24 @@ const GeneralDashboardView: React.FC<GeneralDashboardProps> = ({ projects, setPr
                 const { error: deleteError } = await supabase.from('command_panel_pendings').delete().neq('id', '0');
                 if (deleteError) console.error("Erro ao limpar dados antigos:", deleteError);
                 
-                const success = await setCommandPanelPendings(parsed);
+                const result = await setCommandPanelPendings(parsed);
                 
-                if (success) {
+                if (result.success) {
                     // Simple feedback
                     const toast = document.createElement('div');
                     toast.className = 'fixed bottom-10 right-10 bg-purple-600 text-white px-6 py-3 rounded-xl shadow-2xl z-[5000] font-bold';
-                    toast.innerText = `✓ ${parsed.length} pendências de quadros importadas!`;
+                    toast.innerText = `✓ ${parsed.length} pendências de quadros importadas! ${result.warning || ''}`;
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 3000);
                 } else {
-                    throw new Error("Falha ao salvar no Supabase");
+                    throw new Error(result.error || "Falha ao salvar no Supabase");
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Erro na importação de quadros:", err);
                 setConfirmModal({
                     isOpen: true,
                     title: "Erro na Importação",
-                    message: "Erro ao importar quadros. Verifique o console.",
+                    message: `Erro ao importar quadros: ${err?.message || 'Erro desconhecido'}`,
                     onConfirm: () => setConfirmModal(null),
                     type: 'danger',
                     isAlert: true
@@ -2063,6 +2063,16 @@ export const TeleinfoReport: React.FC = () => {
     const [buyingStatus, setBuyingStatus, reloadBuying, loadingBuying, errorBuying] = useSupabaseData<ProjectBuyingStatus[]>('buying_status', []);
     const [commandPanelPendings, setCommandPanelPendings, reloadCommandPanel, loadingCommandPanel, errorCommandPanel] = useSupabaseData<CommandPanelPending[]>('command_panel_pendings', []);
 
+    // Badge de status de sincronização
+    const SyncBadge = () => (
+        <div className="fixed bottom-4 left-4 z-[100] flex items-center gap-2 bg-nexus-900/80 backdrop-blur border border-nexus-700 px-3 py-1.5 rounded-full shadow-2xl">
+            <div className={`w-2 h-2 rounded-full ${loadingDetailed || loadingGeneral ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+            <span className="text-[9px] font-black text-nexus-400 uppercase tracking-widest">
+                {loadingDetailed || loadingGeneral ? 'Sincronizando...' : 'Local-First Ativo'}
+            </span>
+        </div>
+    );
+
     const isDataLoading = loadingGeneral || loadingDetailed || loadingBuying || loadingCommandPanel;
 
     const handleSync = useCallback(() => {
@@ -2334,7 +2344,8 @@ export const TeleinfoReport: React.FC = () => {
                 </div>
             </div>
             <div className="flex-1 min-h-0">
-                {activeTab === 'dashboard' && (
+                <SyncBadge />
+            {activeTab === 'dashboard' && (
                     <GeneralDashboardView 
                         projects={generalProjects}
                         setProjects={setGeneralProjects}

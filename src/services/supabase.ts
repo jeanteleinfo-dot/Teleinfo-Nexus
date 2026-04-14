@@ -13,7 +13,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
  */
 const saveLocal = (key: string, data: any) => {
     try {
-        localStorage.setItem(`nexus_local_${key}`, JSON.stringify(data));
+        const stringified = JSON.stringify(data);
+        localStorage.setItem(`nexus_local_${key}`, stringified);
+        console.log(`[NexusLocal] Salvo: ${key} (${stringified.length} bytes)`);
     } catch (e) {
         console.error("Erro ao salvar localmente:", e);
     }
@@ -71,30 +73,40 @@ export const syncToSupabase = async (tableName: string, data: any[]) => {
 };
 
 /**
- * Busca dados priorizando Supabase, com fallback para LocalStorage
+ * Busca dados priorizando Supabase, mas mesclando com LocalStorage para evitar perda de dados locais
  */
 export const fetchFromSupabase = async <T>(tableName: string): Promise<T[] | null> => {
+  const localData = loadLocal(tableName) || [];
+  
   try {
-    const { data, error } = await supabase.from(tableName).select('*');
+    const { data: cloudData, error } = await supabase.from(tableName).select('*');
     
     if (error) {
       console.warn(`[Supabase] Erro ao buscar ${tableName}, usando backup local.`);
-      return loadLocal(tableName);
+      return localData as T[];
     }
     
-    // Se trouxe dados, atualiza o backup local
-    if (data && data.length > 0) {
-        saveLocal(tableName, data);
-    } else {
-        // Se a nuvem está vazia, talvez o local tenha algo
-        const local = loadLocal(tableName);
-        if (local) return local;
+    // Estratégia de Mesclagem (Local-First):
+    // Mantemos os dados da nuvem como base, mas preservamos itens locais que ainda não subiram
+    const cloudItems = (cloudData as any[]) || [];
+    const cloudIds = new Set(cloudItems.map(item => item.id));
+    
+    // Filtra itens que existem apenas localmente
+    const localOnlyItems = Array.isArray(localData) 
+        ? localData.filter((item: any) => item && item.id && !cloudIds.has(item.id))
+        : [];
+    
+    const mergedData = [...cloudItems, ...localOnlyItems];
+    
+    // Atualiza o backup local com a versão mesclada
+    if (mergedData.length > 0) {
+        saveLocal(tableName, mergedData);
     }
 
-    return data as T[];
+    return mergedData as T[];
   } catch (err) {
-    console.error(`[Supabase] Falha na busca, tentando local...`);
-    return loadLocal(tableName);
+    console.error(`[Supabase] Falha na busca em ${tableName}, usando backup local.`);
+    return localData as T[];
   }
 };
 
@@ -120,12 +132,25 @@ export function useSupabaseData<T>(
         lastValueRef.current = storedValue;
     }, [storedValue]);
 
+    // Listener para sincronização entre instâncias do mesmo hook (mesma janela)
+    useEffect(() => {
+        const handleSync = (e: any) => {
+            if (e.detail && e.detail.tableName === tableName && e.detail.data !== lastValueRef.current) {
+                setStoredValue(e.detail.data);
+                lastValueRef.current = e.detail.data;
+            }
+        };
+        window.addEventListener('nexus_supabase_sync', handleSync);
+        return () => window.removeEventListener('nexus_supabase_sync', handleSync);
+    }, [tableName]);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
             const data = await fetchFromSupabase<any>(tableName);
             if (data) {
                 setStoredValue(data as unknown as T);
+                lastValueRef.current = data as unknown as T;
             }
         } finally {
             setLoading(false);
@@ -142,6 +167,9 @@ export function useSupabaseData<T>(
         // Atualiza estado e ref IMEDIATAMENTE (UI rápida)
         setStoredValue(nextValue);
         lastValueRef.current = nextValue;
+
+        // Notifica outras instâncias do hook na mesma página
+        window.dispatchEvent(new CustomEvent('nexus_supabase_sync', { detail: { tableName, data: nextValue } }));
 
         if (Array.isArray(nextValue)) {
             const result = await syncToSupabase(tableName, nextValue);
